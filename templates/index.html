@@ -1,1275 +1,851 @@
-<!DOCTYPE html>
-<html lang="en">
+import os
+import sys
+import base64
+from pathlib import Path
 
-<head>
+import cv2
+import numpy as np
+import torch
 
-    <meta charset="UTF-8">
+from flask import Flask, jsonify, render_template, request
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
 
-    <title>
-        FakeShield - AI Face Authenticity Detection
-    </title>
+# ============================================================
+# PATHS
+# ============================================================
 
-    <link
-        rel="stylesheet"
-        href="/static/style.css"
-    >
+BASE_DIR = Path(__file__).resolve().parent
 
-</head>
+DEEPFAKEBENCH_TRAINING = (
+    BASE_DIR / "DeepfakeBench" / "training"
+)
 
+CHECKPOINT_PATH = (
+    BASE_DIR
+    / "ai_face_weights"
+    / "xception_ai_face.pth"
+)
 
-<body>
 
-<div class="container">
+# ============================================================
+# IMPORT XCEPTION
+# ============================================================
 
-    <header>
+sys.path.insert(
+    0,
+    str(DEEPFAKEBENCH_TRAINING)
+)
 
-        <div class="badge">
-            AI-POWERED DEEPFAKE DETECTION
-        </div>
+from networks.xception import Xception
 
-        <h1>
-            🛡️ FakeShield
-        </h1>
 
-        <p>
-            AI Face Authenticity Detection
-        </p>
+# ============================================================
+# FLASK
+# ============================================================
 
-    </header>
+app = Flask(__name__)
 
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 
-    <main>
 
-        <!-- CAMERA SECTION -->
+# ============================================================
+# DEVICE
+# ============================================================
 
-        <section class="camera-card">
+DEVICE = torch.device("cpu")
 
-            <video
-                id="video"
-                autoplay
-                playsinline
-            ></video>
 
-            <canvas
-                id="canvas"
-                hidden
-            ></canvas>
+# ============================================================
+# MODEL CONFIGURATION
+# ============================================================
 
-
-            <div
-                id="cameraPlaceholder"
-                class="placeholder"
-            >
-
-                <div class="camera-icon">
-                    📺
-                </div>
-
-                <h2>
-                    No video source selected
-                </h2>
-
-                <p>
-                    Use your webcam or share your Google Meet window.
-                </p>
-
-            </div>
-
-
-            <!-- FACE DETECTION BOX -->
-
-            <div
-                id="faceBox"
-                class="face-box"
-            ></div>
-
-
-            <!-- STATUS -->
-
-            <div
-                id="status"
-                class="status"
-            >
-                Ready
-            </div>
-
-        </section>
-
-
-        <!-- CONTROLS -->
-
-        <section class="controls">
-
-            <button
-                id="meetBtn"
-                class="primary"
-            >
-                Share Google Meet
-            </button>
-
-
-            <button
-                id="cameraBtn"
-                class="secondary"
-            >
-                Use Webcam
-            </button>
-
-
-            <button
-                id="stopBtn"
-                class="secondary"
-                disabled
-            >
-                Stop
-            </button>
-
-        </section>
-
-
-        <!-- ANALYSIS RESULT -->
-
-        <section class="result-card">
-
-            <div class="result-title">
-                ANALYSIS RESULT
-            </div>
-
-
-            <div
-                id="resultLabel"
-                class="result-label"
-            >
-                WAITING
-            </div>
-
-
-            <div class="probabilities">
-
-                <div>
-
-                    <span>
-                        REAL
-                    </span>
-
-                    <strong id="realValue">
-                        --
-                    </strong>
-
-                </div>
-
-
-                <div>
-
-                    <span>
-                        FAKE
-                    </span>
-
-                    <strong id="fakeValue">
-                        --
-                    </strong>
-
-                </div>
-
-            </div>
-
-
-            <p id="faceInfo">
-                No analysis performed yet.
-            </p>
-
-        </section>
-
-
-        <!-- HOW IT WORKS -->
-
-        <section class="info">
-
-            <h2>
-                How it works
-            </h2>
-
-
-            <div class="steps">
-
-                <div>
-
-                    <span>
-                        1
-                    </span>
-
-                    <p>
-                        Share your Google Meet window or browser tab.
-                    </p>
-
-                </div>
-
-
-                <div>
-
-                    <span>
-                        2
-                    </span>
-
-                    <p>
-                        YuNet detects visible faces in the shared video.
-                    </p>
-
-                </div>
-
-
-                <div>
-
-                    <span>
-                        3
-                    </span>
-
-                    <p>
-                        The largest visible face is analyzed by Xception.
-                    </p>
-
-                </div>
-
-
-                <div>
-
-                    <span>
-                        4
-                    </span>
-
-                    <p>
-                        FakeShield reports REAL, UNCERTAIN, or FAKE.
-                    </p>
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <footer>
-
-            FakeShield • AI Face Authenticity Detection
-
-        </footer>
-
-    </main>
-
-</div>
-
-
-<script>
-
-/* ============================================================
-   ELEMENTS
-============================================================ */
-
-const video =
-    document.getElementById("video");
-
-const canvas =
-    document.getElementById("canvas");
-
-const meetBtn =
-    document.getElementById("meetBtn");
-
-const cameraBtn =
-    document.getElementById("cameraBtn");
-
-const stopBtn =
-    document.getElementById("stopBtn");
-
-const statusText =
-    document.getElementById("status");
-
-const resultLabel =
-    document.getElementById("resultLabel");
-
-const realValue =
-    document.getElementById("realValue");
-
-const fakeValue =
-    document.getElementById("fakeValue");
-
-const faceInfo =
-    document.getElementById("faceInfo");
-
-const faceBox =
-    document.getElementById("faceBox");
-
-const placeholder =
-    document.getElementById("cameraPlaceholder");
-
-
-/* ============================================================
-   STATE
-============================================================ */
-
-let stream = null;
-
-let running = false;
-
-let busy = false;
-
-let timer = null;
-
-
-/*
- * Store recent predictions.
- * This reduces sudden changes caused by:
- * - speaking
- * - blinking
- * - head movement
- * - lighting changes
- */
-
-let predictionHistory = [];
-
-let fakeStreak = 0;
-
-
-/*
- * Number of recent predictions used
- * for smoothing.
- */
-
-const MAX_HISTORY = 5;
-
-
-/* ============================================================
-   CLASSIFICATION SETTINGS
-============================================================ */
-
-/*
- * FAKE is only declared when:
- *
- * 1. Average fake probability is >= 85%
- * 2. This happens for 4 consecutive predictions
- *
- * This prevents a single bad frame from
- * declaring a real person as FAKE.
- */
-
-const FAKE_THRESHOLD = 85;
-
-const UNCERTAIN_THRESHOLD = 65;
-
-const REQUIRED_FAKE_STREAK = 4;
-
-
-/* ============================================================
-   STATUS
-============================================================ */
-
-function setStatus(text) {
-
-    statusText.textContent = text;
-
+MODEL_CONFIG = {
+    "mode": "original",
+    "num_classes": 1,
+    "inc": 3,
+    "dropout": False,
 }
 
 
-/* ============================================================
-   RESET RESULT
-============================================================ */
-
-function resetResult() {
-
-    resultLabel.textContent =
-        "WAITING";
-
-    resultLabel.className =
-        "result-label";
+model = None
+model_error = None
 
 
-    realValue.textContent =
-        "--";
+# ============================================================
+# LOAD MODEL
+# ============================================================
 
-    fakeValue.textContent =
-        "--";
+def load_model():
+
+    global model
+    global model_error
+
+    try:
+
+        if not CHECKPOINT_PATH.exists():
+
+            raise FileNotFoundError(
+                f"Checkpoint not found: {CHECKPOINT_PATH}"
+            )
+
+        print(
+            "Loading FakeShield Xception model..."
+        )
+
+        model = Xception(
+            MODEL_CONFIG
+        )
+
+        checkpoint = torch.load(
+            CHECKPOINT_PATH,
+            map_location="cpu"
+        )
+
+        # Handle common checkpoint formats.
+
+        if isinstance(checkpoint, dict):
+
+            if "state_dict" in checkpoint:
+
+                checkpoint = checkpoint["state_dict"]
+
+            elif "model_state_dict" in checkpoint:
+
+                checkpoint = checkpoint["model_state_dict"]
 
 
-    faceInfo.textContent =
-        "No analysis performed yet.";
+        # Clean checkpoint keys.
+
+        new_checkpoint = {}
+
+        for key, value in checkpoint.items():
+
+            if key.startswith("backbone."):
+
+                new_key = key[len("backbone."):]
+
+            else:
+
+                new_key = key
+
+            new_checkpoint[new_key] = value
 
 
-    faceBox.style.display =
-        "none";
+        model.load_state_dict(
+            new_checkpoint,
+            strict=True
+        )
+
+        model.to(
+            DEVICE
+        )
+
+        model.eval()
+
+        print(
+            "FakeShield model loaded successfully."
+        )
+
+    except Exception as exc:
+
+        model = None
+
+        model_error = str(exc)
+
+        print(
+            "MODEL LOAD ERROR:",
+            exc
+        )
 
 
-    predictionHistory = [];
-
-    fakeStreak = 0;
-
-}
+load_model()
 
 
-/* ============================================================
-   DRAW FACE BOX
-============================================================ */
+# ============================================================
+# YUNET FACE DETECTOR
+# ============================================================
 
-function drawFaceBox(result) {
+YUNET_PATH = (
+    BASE_DIR
+    / "phase1"
+    / "face_detection_yunet_2026may.onnx"
+)
 
-    if (!result.box) {
 
-        faceBox.style.display =
-            "none";
+face_detector = None
+yunet_error = None
 
-        return;
+
+try:
+
+    if not YUNET_PATH.exists():
+
+        raise FileNotFoundError(
+            f"YuNet model not found: {YUNET_PATH}"
+        )
+
+    face_detector = cv2.FaceDetectorYN.create(
+        str(YUNET_PATH),
+        "",
+        (320, 320),
+        0.8,
+        0.3,
+        5000
+    )
+
+    print(
+        "YuNet loaded successfully."
+    )
+
+except Exception as exc:
+
+    yunet_error = str(exc)
+
+    print(
+        "YUNET LOAD ERROR:",
+        exc
+    )
+
+
+# ============================================================
+# FACE PREDICTION
+# ============================================================
+
+def predict_face(face_bgr):
+
+    if model is None:
+
+        raise RuntimeError(
+            model_error
+            or
+            "FakeShield model is not loaded."
+        )
+
+
+    # --------------------------------------------------------
+    # RESIZE FACE
+    # --------------------------------------------------------
+
+    face = cv2.resize(
+        face_bgr,
+        (299, 299),
+        interpolation=cv2.INTER_AREA
+    )
+
+
+    # --------------------------------------------------------
+    # BGR -> RGB
+    # --------------------------------------------------------
+
+    face = cv2.cvtColor(
+        face,
+        cv2.COLOR_BGR2RGB
+    )
+
+
+    # --------------------------------------------------------
+    # NORMALIZE
+    # --------------------------------------------------------
+
+    face = face.astype(
+        np.float32
+    ) / 255.0
+
+
+    # --------------------------------------------------------
+    # HWC -> CHW
+    # --------------------------------------------------------
+
+    face = np.transpose(
+        face,
+        (2, 0, 1)
+    )
+
+
+    # --------------------------------------------------------
+    # ADD BATCH DIMENSION
+    # --------------------------------------------------------
+
+    face = np.expand_dims(
+        face,
+        axis=0
+    )
+
+
+    # --------------------------------------------------------
+    # NUMPY -> TORCH
+    # --------------------------------------------------------
+
+    tensor = torch.from_numpy(
+        face
+    ).to(
+        DEVICE
+    )
+
+
+    # --------------------------------------------------------
+    # MODEL INFERENCE
+    # --------------------------------------------------------
+
+    with torch.no_grad():
+
+        result = model(
+            tensor
+        )
+
+
+    # --------------------------------------------------------
+    # HANDLE MODEL OUTPUT
+    # --------------------------------------------------------
+
+    output = (
+        result[0]
+        if isinstance(result, tuple)
+        else result
+    )
+
+    output = output.squeeze()
+
+
+    # ========================================================
+    # PREDICTION DIRECTION
+    # ========================================================
+
+    # Treat the model output as REAL probability.
+    #
+    # REAL probability = sigmoid(output)
+    #
+    # FAKE probability = 1 - REAL probability
+
+    real_probability = (
+        torch.sigmoid(
+            output
+        ).item()
+    )
+
+
+    fake_probability = (
+        1.0 -
+        real_probability
+    )
+
+
+    # Print probabilities in Render logs.
+
+    print(
+        "Model probabilities:",
+        "REAL =",
+        round(
+            real_probability * 100,
+            2
+        ),
+        "%",
+        "FAKE =",
+        round(
+            fake_probability * 100,
+            2
+        ),
+        "%"
+    )
+
+
+    return float(
+        fake_probability
+    )
+
+
+# ============================================================
+# DECODE BROWSER IMAGE
+# ============================================================
+
+def decode_image(data_url):
+
+    if not data_url:
+
+        raise ValueError(
+            "No image was supplied."
+        )
+
+
+    if "," in data_url:
+
+        _, encoded = data_url.split(
+            ",",
+            1
+        )
+
+    else:
+
+        encoded = data_url
+
+
+    raw = base64.b64decode(
+        encoded
+    )
+
+
+    array = np.frombuffer(
+        raw,
+        dtype=np.uint8
+    )
+
+
+    frame = cv2.imdecode(
+        array,
+        cv2.IMREAD_COLOR
+    )
+
+
+    if frame is None:
+
+        raise ValueError(
+            "Could not decode the image."
+        )
+
+
+    return frame
+
+
+# ============================================================
+# DETECT LARGEST FACE
+# ============================================================
+
+def detect_largest_face(frame):
+
+    if face_detector is None:
+
+        raise RuntimeError(
+            yunet_error
+            or
+            "YuNet is not loaded."
+        )
+
+
+    height, width = frame.shape[:2]
+
+
+    face_detector.setInputSize(
+        (
+            int(width),
+            int(height)
+        )
+    )
+
+
+    _, faces = face_detector.detect(
+        frame
+    )
+
+
+    if faces is None or len(faces) == 0:
+
+        return None, 0
+
+
+    largest = None
+    largest_area = 0
+
+
+    for face in faces:
+
+        x = int(face[0])
+        y = int(face[1])
+        w = int(face[2])
+        h = int(face[3])
+
+
+        # Keep coordinates inside image.
+
+        x = max(
+            0,
+            x
+        )
+
+        y = max(
+            0,
+            y
+        )
+
+
+        w = min(
+            w,
+            int(width - x)
+        )
+
+        h = min(
+            h,
+            int(height - y)
+        )
+
+
+        if w <= 0 or h <= 0:
+
+            continue
+
+
+        area = int(
+            w * h
+        )
+
+
+        if area > largest_area:
+
+            largest_area = area
+
+            largest = (
+                int(x),
+                int(y),
+                int(w),
+                int(h)
+            )
+
+
+    return (
+        largest,
+        int(len(faces))
+    )
+
+
+# ============================================================
+# CLASSIFICATION
+# ============================================================
+
+def classify(fake_probability):
+
+    fake_probability = float(
+        fake_probability
+    )
+
+
+    # Keep value between 0 and 1.
+
+    fake_probability = max(
+        0.0,
+        min(
+            1.0,
+            fake_probability
+        )
+    )
+
+
+    real_probability = (
+        1.0 -
+        fake_probability
+    )
+
+
+    # Classification thresholds.
+
+    if fake_probability >= 0.85:
+
+        label = "FAKE"
+
+    elif fake_probability >= 0.65:
+
+        label = "UNCERTAIN"
+
+    else:
+
+        label = "REAL"
+
+
+    return {
+
+        "label": str(
+            label
+        ),
+
+        "fake_probability": float(
+            round(
+                fake_probability * 100,
+                1
+            )
+        ),
+
+        "real_probability": float(
+            round(
+                real_probability * 100,
+                1
+            )
+        )
 
     }
 
 
-    if (
-        !video.videoWidth ||
-        !video.videoHeight
-    ) {
+# ============================================================
+# HOME
+# ============================================================
 
-        return;
+@app.get("/")
+def home():
 
-    }
+    return render_template(
+        "index.html"
+    )
 
 
-    /*
-     * Actual displayed video position.
-     */
+# ============================================================
+# HEALTH CHECK
+# ============================================================
 
-    const videoRect =
-        video.getBoundingClientRect();
+@app.get("/health")
+def health():
 
+    return jsonify({
 
-    /*
-     * Camera card position.
-     */
+        "status": "ok",
 
-    const containerRect =
-        video.parentElement.getBoundingClientRect();
+        "model_loaded": bool(
+            model is not None
+        ),
 
+        "yunet_loaded": bool(
+            face_detector is not None
+        ),
 
-    /*
-     * Scale backend coordinates to
-     * displayed video coordinates.
-     */
+        "model_error": (
+            str(model_error)
+            if model_error
+            else None
+        ),
 
-    const scaleX =
-        videoRect.width /
-        video.videoWidth;
+        "yunet_error": (
+            str(yunet_error)
+            if yunet_error
+            else None
+        )
 
+    })
 
-    const scaleY =
-        videoRect.height /
-        video.videoHeight;
 
+# ============================================================
+# PREDICTION
+# ============================================================
 
-    /*
-     * Convert coordinates relative
-     * to camera card.
-     */
+@app.post("/predict")
+def predict():
 
-    const left =
-        (Number(result.box.x) * scaleX) +
-        (videoRect.left - containerRect.left);
+    try:
 
+        data = (
+            request.get_json(
+                silent=True
+            )
+            or {}
+        )
 
-    const top =
-        (Number(result.box.y) * scaleY) +
-        (videoRect.top - containerRect.top);
 
+        image_data = data.get(
+            "image"
+        )
 
-    const width =
-        Number(result.box.w) *
-        scaleX;
 
+        frame = decode_image(
+            image_data
+        )
 
-    const height =
-        Number(result.box.h) *
-        scaleY;
 
+        # ----------------------------------------------------
+        # FACE DETECTION
+        # ----------------------------------------------------
 
-    faceBox.style.left =
-        `${left}px`;
+        face_box, face_count = (
+            detect_largest_face(
+                frame
+            )
+        )
 
 
-    faceBox.style.top =
-        `${top}px`;
+        # ----------------------------------------------------
+        # NO FACE
+        # ----------------------------------------------------
 
+        if face_box is None:
 
-    faceBox.style.width =
-        `${width}px`;
+            return jsonify({
 
+                "ok": True,
 
-    faceBox.style.height =
-        `${height}px`;
+                "face_detected": False,
 
+                "face_count": int(
+                    face_count
+                ),
 
-    faceBox.style.display =
-        "block";
+                "message":
+                    "No face detected."
 
-}
+            })
 
 
-/* ============================================================
-   DISPLAY RESULT
-============================================================ */
+        # ----------------------------------------------------
+        # FACE BOX
+        # ----------------------------------------------------
 
-function displayResult(result) {
+        x, y, w, h = face_box
 
-    /*
-     * No face detected.
-     */
 
-    if (!result.face_detected) {
+        x = int(x)
+        y = int(y)
+        w = int(w)
+        h = int(h)
 
-        resultLabel.textContent =
-            "NO FACE";
 
-        resultLabel.className =
-            "result-label uncertain";
+        face_count = int(
+            face_count
+        )
 
 
-        realValue.textContent =
-            "--";
+        # ----------------------------------------------------
+        # SMALL FACE
+        # ----------------------------------------------------
 
-        fakeValue.textContent =
-            "--";
+        if w < 70 or h < 70:
 
+            return jsonify({
 
-        faceInfo.textContent =
-            result.message ||
-            "No face detected.";
+                "ok": True,
 
+                "face_detected": False,
 
-        faceBox.style.display =
-            "none";
+                "face_count": int(
+                    face_count
+                ),
 
+                "message":
+                    "Face is too small for reliable analysis."
 
-        predictionHistory = [];
+            })
 
-        fakeStreak = 0;
 
-        return;
+        # ----------------------------------------------------
+        # CROP FACE
+        # ----------------------------------------------------
 
-    }
+        face_crop = frame[
+            y:y + h,
+            x:x + w
+        ]
 
 
-    /* --------------------------------------------------------
-       GET BACKEND VALUES
-    -------------------------------------------------------- */
+        # ----------------------------------------------------
+        # AI CLASSIFICATION
+        # ----------------------------------------------------
 
-    const fakeProbability =
-        Number(
-            result.fake_probability
-        );
+        fake_probability = (
+            predict_face(
+                face_crop
+            )
+        )
 
 
-    const realProbability =
-        Number(
-            result.real_probability
-        );
+        # ----------------------------------------------------
+        # CLASSIFY
+        # ----------------------------------------------------
 
+        result = classify(
+            fake_probability
+        )
 
-    /*
-     * Check values.
-     */
 
-    if (
-        !Number.isFinite(fakeProbability) ||
-        !Number.isFinite(realProbability)
-    ) {
+        # ----------------------------------------------------
+        # FINAL RESPONSE
+        # ----------------------------------------------------
 
-        return;
+        return jsonify({
 
-    }
+            "ok": True,
 
+            "face_detected": True,
 
-    /* --------------------------------------------------------
-       STORE RECENT PREDICTION
-    -------------------------------------------------------- */
+            "face_count": int(
+                face_count
+            ),
 
-    predictionHistory.push(
-        fakeProbability
-    );
+            "box": {
 
+                "x": int(x),
 
-    /*
-     * Keep only the latest 5.
-     */
+                "y": int(y),
 
-    if (
-        predictionHistory.length >
-        MAX_HISTORY
-    ) {
+                "w": int(w),
 
-        predictionHistory.shift();
+                "h": int(h)
 
-    }
-
-
-    /* --------------------------------------------------------
-       CALCULATE SMOOTHED AVERAGE
-    -------------------------------------------------------- */
-
-    const averageFake =
-        predictionHistory.reduce(
-            (sum, value) => {
-                return sum + value;
             },
-            0
-        ) /
-        predictionHistory.length;
 
+            "label": str(
+                result["label"]
+            ),
 
-    const averageReal =
-        100 - averageFake;
+            "fake_probability": float(
+                result[
+                    "fake_probability"
+                ]
+            ),
 
+            "real_probability": float(
+                result[
+                    "real_probability"
+                ]
+            )
 
-    /* --------------------------------------------------------
-       DISPLAY PROBABILITIES
-    -------------------------------------------------------- */
+        })
 
-    realValue.textContent =
-        averageReal.toFixed(1) +
-        "%";
 
+    except Exception as exc:
 
-    fakeValue.textContent =
-        averageFake.toFixed(1) +
-        "%";
+        print(
+            "PREDICTION ERROR:",
+            exc
+        )
 
 
-    /* --------------------------------------------------------
-       FAKE STREAK
-    -------------------------------------------------------- */
+        return jsonify({
 
-    /*
-     * Only count a FAKE streak when
-     * probability is at least 85%.
-     */
+            "ok": False,
 
-    if (
-        averageFake >=
-        FAKE_THRESHOLD
-    ) {
+            "error": str(
+                exc
+            )
 
-        fakeStreak++;
+        }), 500
 
-    } else {
 
-        fakeStreak = 0;
+# ============================================================
+# FILE TOO LARGE
+# ============================================================
 
-    }
+@app.errorhandler(413)
+def too_large(_error):
 
+    return jsonify({
 
-    /* --------------------------------------------------------
-       FINAL CLASSIFICATION
-    -------------------------------------------------------- */
+        "ok": False,
 
-    let finalLabel;
+        "error":
+            "Image is too large. "
+            "Please use a smaller image."
 
+    }), 413
 
-    /*
-     * FAKE
-     *
-     * Requires 4 consecutive predictions
-     * with >= 85% fake probability.
-     */
 
-    if (
-        fakeStreak >=
-        REQUIRED_FAKE_STREAK
-        &&
-        averageFake >=
-        FAKE_THRESHOLD
-    ) {
+# ============================================================
+# RUN APPLICATION
+# ============================================================
 
-        finalLabel =
-            "FAKE";
+if __name__ == "__main__":
 
-    }
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
 
 
-    /*
-     * UNCERTAIN
-     *
-     * 65% to 84.9%
-     */
-
-    else if (
-        averageFake >=
-        UNCERTAIN_THRESHOLD
-    ) {
-
-        finalLabel =
-            "UNCERTAIN";
-
-    }
-
-
-    /*
-     * REAL
-     *
-     * Below 65%.
-     */
-
-    else {
-
-        finalLabel =
-            "REAL";
-
-    }
-
-
-    /* --------------------------------------------------------
-       UPDATE RESULT LABEL
-    -------------------------------------------------------- */
-
-    resultLabel.textContent =
-        finalLabel;
-
-
-    resultLabel.className =
-        "result-label " +
-        finalLabel.toLowerCase();
-
-
-    /* --------------------------------------------------------
-       FACE INFORMATION
-    -------------------------------------------------------- */
-
-    faceInfo.textContent =
-        `${result.face_count} face(s) detected. ` +
-        `Largest face analyzed.`;
-
-
-    /* --------------------------------------------------------
-       DRAW FACE BOX
-    -------------------------------------------------------- */
-
-    drawFaceBox(result);
-
-}
-
-
-/* ============================================================
-   ANALYZE FRAME
-============================================================ */
-
-async function analyzeFrame() {
-
-    if (
-        !running ||
-        busy
-    ) {
-
-        return;
-
-    }
-
-
-    if (
-        !video.videoWidth ||
-        !video.videoHeight
-    ) {
-
-        return;
-
-    }
-
-
-    busy = true;
-
-
-    /* --------------------------------------------------------
-       CANVAS
-    -------------------------------------------------------- */
-
-    canvas.width =
-        video.videoWidth;
-
-    canvas.height =
-        video.videoHeight;
-
-
-    const ctx =
-        canvas.getContext("2d");
-
-
-    ctx.drawImage(
-        video,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
-
-
-    /* --------------------------------------------------------
-       CONVERT TO JPEG
-    -------------------------------------------------------- */
-
-    const image =
-        canvas.toDataURL(
-            "image/jpeg",
-            0.70
-        );
-
-
-    try {
-
-        setStatus(
-            "Analyzing..."
-        );
-
-
-        /* ----------------------------------------------------
-           SEND FRAME TO BACKEND
-        ---------------------------------------------------- */
-
-        const response =
-            await fetch(
-                "/predict",
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body:
-                        JSON.stringify({
-                            image: image
-                        })
-                }
-            );
-
-
-        /*
-         * Read text first.
-         *
-         * This prevents JSON parsing errors if
-         * Render returns HTML during an error.
-         */
-
-        const responseText =
-            await response.text();
-
-
-        let result;
-
-
-        try {
-
-            result =
-                JSON.parse(
-                    responseText
-                );
-
-        } catch (jsonError) {
-
-            console.error(
-                "Invalid JSON response:",
-                responseText
-            );
-
-            throw new Error(
-                `Server returned invalid response (${response.status}).`
-            );
-
-        }
-
-
-        /* ----------------------------------------------------
-           HTTP ERROR
-        ---------------------------------------------------- */
-
-        if (!response.ok) {
-
-            throw new Error(
-                result.error ||
-                `Server error (${response.status}).`
-            );
-
-        }
-
-
-        /* ----------------------------------------------------
-           BACKEND ERROR
-        ---------------------------------------------------- */
-
-        if (
-            result.ok === false
-        ) {
-
-            throw new Error(
-                result.error ||
-                "Prediction failed."
-            );
-
-        }
-
-
-        /* ----------------------------------------------------
-           DISPLAY
-        ---------------------------------------------------- */
-
-        displayResult(
-            result
-        );
-
-
-        setStatus(
-            "Live analysis"
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "Prediction error:",
-            error
-        );
-
-
-        setStatus(
-            "Prediction error"
-        );
-
-
-        faceInfo.textContent =
-            error.message;
-
-
-    } finally {
-
-        busy = false;
-
-    }
-
-}
-
-
-/* ============================================================
-   STOP STREAM
-============================================================ */
-
-function stopCurrentStream() {
-
-    running = false;
-
-
-    if (timer) {
-
-        clearInterval(
-            timer
-        );
-
-        timer = null;
-
-    }
-
-
-    if (stream) {
-
-        stream
-            .getTracks()
-            .forEach(
-                track => {
-                    track.stop();
-                }
-            );
-
-        stream = null;
-
-    }
-
-
-    video.srcObject =
-        null;
-
-
-    video.style.display =
-        "none";
-
-
-    placeholder.style.display =
-        "flex";
-
-
-    meetBtn.disabled =
-        false;
-
-
-    cameraBtn.disabled =
-        false;
-
-
-    stopBtn.disabled =
-        true;
-
-
-    faceBox.style.display =
-        "none";
-
-
-    predictionHistory = [];
-
-    fakeStreak = 0;
-
-}
-
-
-/* ============================================================
-   START STREAM
-============================================================ */
-
-async function startStream(
-    newStream,
-    message
-) {
-
-    stopCurrentStream();
-
-
-    stream =
-        newStream;
-
-
-    video.srcObject =
-        stream;
-
-
-    video.style.display =
-        "block";
-
-
-    placeholder.style.display =
-        "none";
-
-
-    running =
-        true;
-
-
-    meetBtn.disabled =
-        true;
-
-
-    cameraBtn.disabled =
-        true;
-
-
-    stopBtn.disabled =
-        false;
-
-
-    resetResult();
-
-
-    setStatus(
-        message
-    );
-
-
-    /*
-     * Analyze once every 1.5 seconds.
-     */
-
-    timer =
-        setInterval(
-            analyzeFrame,
-            1500
-        );
-
-
-    const videoTrack =
-        stream.getVideoTracks()[0];
-
-
-    if (videoTrack) {
-
-        videoTrack.addEventListener(
-            "ended",
-            () => {
-
-                stopCurrentStream();
-
-                setStatus(
-                    "Shared video ended"
-                );
-
-            }
-        );
-
-    }
-
-}
-
-
-/* ============================================================
-   GOOGLE MEET / SCREEN SHARE
-============================================================ */
-
-async function shareGoogleMeet() {
-
-    try {
-
-        const newStream =
-            await navigator.mediaDevices.getDisplayMedia({
-
-                video: {
-
-                    frameRate: {
-
-                        ideal: 10,
-
-                        max: 15
-
-                    }
-
-                },
-
-                audio: false
-
-            });
-
-
-        await startStream(
-            newStream,
-            "Google Meet screen shared"
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "Screen sharing error:",
-            error
-        );
-
-
-        setStatus(
-            "Screen sharing cancelled."
-        );
-
-
-        faceInfo.textContent =
-            error.message;
-
-    }
-
-}
-
-
-/* ============================================================
-   WEBCAM
-============================================================ */
-
-async function useWebcam() {
-
-    try {
-
-        const newStream =
-            await navigator.mediaDevices.getUserMedia({
-
-                video: {
-
-                    facingMode: "user",
-
-                    width: {
-
-                        ideal: 1280
-
-                    },
-
-                    height: {
-
-                        ideal: 720
-
-                    }
-
-                },
-
-                audio: false
-
-            });
-
-
-        await startStream(
-            newStream,
-            "Webcam started"
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "Camera error:",
-            error
-        );
-
-
-        setStatus(
-            "Camera permission denied or unavailable."
-        );
-
-
-        faceInfo.textContent =
-            error.message;
-
-    }
-
-}
-
-
-/* ============================================================
-   BUTTON EVENTS
-============================================================ */
-
-meetBtn.addEventListener(
-    "click",
-    shareGoogleMeet
-);
-
-
-cameraBtn.addEventListener(
-    "click",
-    useWebcam
-);
-
-
-stopBtn.addEventListener(
-    "click",
-    () => {
-
-        stopCurrentStream();
-
-        resetResult();
-
-        setStatus(
-            "Stopped"
-        );
-
-    }
-);
-
-
-/* ============================================================
-   CLEANUP
-============================================================ */
-
-window.addEventListener(
-    "beforeunload",
-    stopCurrentStream
-);
-
-</script>
-
-</body>
-
-</html>
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False
+    )
