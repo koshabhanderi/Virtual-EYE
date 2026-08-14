@@ -45,7 +45,7 @@
 
     <main>
 
-        <!-- CAMERA / VIDEO SECTION -->
+        <!-- CAMERA SECTION -->
 
         <section class="camera-card">
 
@@ -81,7 +81,7 @@
             </div>
 
 
-            <!-- GREEN FACE DETECTION BOX -->
+            <!-- FACE DETECTION BOX -->
 
             <div
                 id="faceBox"
@@ -132,7 +132,7 @@
         </section>
 
 
-        <!-- RESULT -->
+        <!-- ANALYSIS RESULT -->
 
         <section class="result-card">
 
@@ -322,10 +322,11 @@ let timer = null;
 
 /*
  * Store recent predictions.
- *
- * This prevents one unstable frame from immediately
- * changing REAL into FAKE while the person is talking,
- * moving, blinking, etc.
+ * This reduces sudden changes caused by:
+ * - speaking
+ * - blinking
+ * - head movement
+ * - lighting changes
  */
 
 let predictionHistory = [];
@@ -334,10 +335,32 @@ let fakeStreak = 0;
 
 
 /*
- * Number of recent predictions used for smoothing.
+ * Number of recent predictions used
+ * for smoothing.
  */
 
 const MAX_HISTORY = 5;
+
+
+/* ============================================================
+   CLASSIFICATION SETTINGS
+============================================================ */
+
+/*
+ * FAKE is only declared when:
+ *
+ * 1. Average fake probability is >= 85%
+ * 2. This happens for 4 consecutive predictions
+ *
+ * This prevents a single bad frame from
+ * declaring a real person as FAKE.
+ */
+
+const FAKE_THRESHOLD = 85;
+
+const UNCERTAIN_THRESHOLD = 65;
+
+const REQUIRED_FAKE_STREAK = 4;
 
 
 /* ============================================================
@@ -363,22 +386,21 @@ function resetResult() {
     resultLabel.className =
         "result-label";
 
+
     realValue.textContent =
         "--";
 
     fakeValue.textContent =
         "--";
 
+
     faceInfo.textContent =
         "No analysis performed yet.";
+
 
     faceBox.style.display =
         "none";
 
-
-    /*
-     * Clear previous prediction history.
-     */
 
     predictionHistory = [];
 
@@ -393,11 +415,6 @@ function resetResult() {
 
 function drawFaceBox(result) {
 
-    /*
-     * If backend did not return a face box,
-     * hide the rectangle.
-     */
-
     if (!result.box) {
 
         faceBox.style.display =
@@ -407,10 +424,6 @@ function drawFaceBox(result) {
 
     }
 
-
-    /*
-     * Wait until the browser knows the video dimensions.
-     */
 
     if (
         !video.videoWidth ||
@@ -423,8 +436,7 @@ function drawFaceBox(result) {
 
 
     /*
-     * Get the actual displayed position
-     * of the video.
+     * Actual displayed video position.
      */
 
     const videoRect =
@@ -432,7 +444,7 @@ function drawFaceBox(result) {
 
 
     /*
-     * Get the camera-card position.
+     * Camera card position.
      */
 
     const containerRect =
@@ -440,13 +452,14 @@ function drawFaceBox(result) {
 
 
     /*
-     * Calculate scaling between the original
-     * video resolution and displayed video.
+     * Scale backend coordinates to
+     * displayed video coordinates.
      */
 
     const scaleX =
         videoRect.width /
         video.videoWidth;
+
 
     const scaleY =
         videoRect.height /
@@ -454,8 +467,8 @@ function drawFaceBox(result) {
 
 
     /*
-     * Convert backend coordinates into
-     * coordinates relative to the camera card.
+     * Convert coordinates relative
+     * to camera card.
      */
 
     const left =
@@ -478,26 +491,21 @@ function drawFaceBox(result) {
         scaleY;
 
 
-    /*
-     * Apply rectangle position.
-     */
-
     faceBox.style.left =
         `${left}px`;
+
 
     faceBox.style.top =
         `${top}px`;
 
+
     faceBox.style.width =
         `${width}px`;
+
 
     faceBox.style.height =
         `${height}px`;
 
-
-    /*
-     * Show green rectangle.
-     */
 
     faceBox.style.display =
         "block";
@@ -512,7 +520,7 @@ function drawFaceBox(result) {
 function displayResult(result) {
 
     /*
-     * No face detected
+     * No face detected.
      */
 
     if (!result.face_detected) {
@@ -540,11 +548,6 @@ function displayResult(result) {
             "none";
 
 
-        /*
-         * Clear prediction history because
-         * there is no valid face.
-         */
-
         predictionHistory = [];
 
         fakeStreak = 0;
@@ -571,7 +574,7 @@ function displayResult(result) {
 
 
     /*
-     * Safety check.
+     * Check values.
      */
 
     if (
@@ -594,7 +597,7 @@ function displayResult(result) {
 
 
     /*
-     * Keep only the latest 5 predictions.
+     * Keep only the latest 5.
      */
 
     if (
@@ -608,7 +611,7 @@ function displayResult(result) {
 
 
     /* --------------------------------------------------------
-       CALCULATE AVERAGE
+       CALCULATE SMOOTHED AVERAGE
     -------------------------------------------------------- */
 
     const averageFake =
@@ -626,7 +629,7 @@ function displayResult(result) {
 
 
     /* --------------------------------------------------------
-       DISPLAY SMOOTHED PROBABILITIES
+       DISPLAY PROBABILITIES
     -------------------------------------------------------- */
 
     realValue.textContent =
@@ -640,18 +643,18 @@ function displayResult(result) {
 
 
     /* --------------------------------------------------------
-       STABLE CLASSIFICATION
+       FAKE STREAK
     -------------------------------------------------------- */
 
     /*
-     * We require several consecutive high
-     * predictions before declaring FAKE.
-     *
-     * This helps prevent speaking/movement
-     * from causing sudden FAKE results.
+     * Only count a FAKE streak when
+     * probability is at least 85%.
      */
 
-    if (averageFake >= 55) {
+    if (
+        averageFake >=
+        FAKE_THRESHOLD
+    ) {
 
         fakeStreak++;
 
@@ -662,15 +665,27 @@ function displayResult(result) {
     }
 
 
+    /* --------------------------------------------------------
+       FINAL CLASSIFICATION
+    -------------------------------------------------------- */
+
     let finalLabel;
 
 
     /*
-     * FAKE:
-     * Require 3 consecutive high averages.
+     * FAKE
+     *
+     * Requires 4 consecutive predictions
+     * with >= 85% fake probability.
      */
 
-    if (fakeStreak >= 3) {
+    if (
+        fakeStreak >=
+        REQUIRED_FAKE_STREAK
+        &&
+        averageFake >=
+        FAKE_THRESHOLD
+    ) {
 
         finalLabel =
             "FAKE";
@@ -679,11 +694,15 @@ function displayResult(result) {
 
 
     /*
-     * UNCERTAIN:
-     * Moderate probability.
+     * UNCERTAIN
+     *
+     * 65% to 84.9%
      */
 
-    else if (averageFake >= 45) {
+    else if (
+        averageFake >=
+        UNCERTAIN_THRESHOLD
+    ) {
 
         finalLabel =
             "UNCERTAIN";
@@ -692,8 +711,9 @@ function displayResult(result) {
 
 
     /*
-     * REAL:
-     * Low/moderate fake probability.
+     * REAL
+     *
+     * Below 65%.
      */
 
     else {
@@ -705,7 +725,7 @@ function displayResult(result) {
 
 
     /* --------------------------------------------------------
-       UPDATE LABEL
+       UPDATE RESULT LABEL
     -------------------------------------------------------- */
 
     resultLabel.textContent =
@@ -727,7 +747,7 @@ function displayResult(result) {
 
 
     /* --------------------------------------------------------
-       DRAW GREEN FACE BOX
+       DRAW FACE BOX
     -------------------------------------------------------- */
 
     drawFaceBox(result);
@@ -741,11 +761,6 @@ function displayResult(result) {
 
 async function analyzeFrame() {
 
-    /*
-     * Don't process if stopped or another
-     * request is already running.
-     */
-
     if (
         !running ||
         busy
@@ -755,10 +770,6 @@ async function analyzeFrame() {
 
     }
 
-
-    /*
-     * Make sure video has valid dimensions.
-     */
 
     if (
         !video.videoWidth ||
@@ -774,7 +785,7 @@ async function analyzeFrame() {
 
 
     /* --------------------------------------------------------
-       COPY VIDEO FRAME TO CANVAS
+       CANVAS
     -------------------------------------------------------- */
 
     canvas.width =
@@ -785,9 +796,7 @@ async function analyzeFrame() {
 
 
     const ctx =
-        canvas.getContext(
-            "2d"
-        );
+        canvas.getContext("2d");
 
 
     ctx.drawImage(
@@ -800,7 +809,7 @@ async function analyzeFrame() {
 
 
     /* --------------------------------------------------------
-       CONVERT FRAME TO JPEG
+       CONVERT TO JPEG
     -------------------------------------------------------- */
 
     const image =
@@ -818,7 +827,7 @@ async function analyzeFrame() {
 
 
         /* ----------------------------------------------------
-           SEND IMAGE TO FLASK
+           SEND FRAME TO BACKEND
         ---------------------------------------------------- */
 
         const response =
@@ -841,13 +850,10 @@ async function analyzeFrame() {
 
 
         /*
-         * IMPORTANT:
+         * Read text first.
          *
-         * Read text first instead of immediately
-         * calling response.json().
-         *
-         * This prevents JSON errors when Render
-         * returns an HTML error page.
+         * This prevents JSON parsing errors if
+         * Render returns HTML during an error.
          */
 
         const responseText =
@@ -867,7 +873,7 @@ async function analyzeFrame() {
         } catch (jsonError) {
 
             console.error(
-                "Server returned non-JSON:",
+                "Invalid JSON response:",
                 responseText
             );
 
@@ -878,9 +884,9 @@ async function analyzeFrame() {
         }
 
 
-        /*
-         * Handle HTTP errors.
-         */
+        /* ----------------------------------------------------
+           HTTP ERROR
+        ---------------------------------------------------- */
 
         if (!response.ok) {
 
@@ -892,9 +898,9 @@ async function analyzeFrame() {
         }
 
 
-        /*
-         * Handle backend errors.
-         */
+        /* ----------------------------------------------------
+           BACKEND ERROR
+        ---------------------------------------------------- */
 
         if (
             result.ok === false
@@ -909,7 +915,7 @@ async function analyzeFrame() {
 
 
         /* ----------------------------------------------------
-           DISPLAY RESULT
+           DISPLAY
         ---------------------------------------------------- */
 
         displayResult(
@@ -949,17 +955,13 @@ async function analyzeFrame() {
 
 
 /* ============================================================
-   STOP CURRENT STREAM
+   STOP STREAM
 ============================================================ */
 
 function stopCurrentStream() {
 
     running = false;
 
-
-    /*
-     * Stop analysis timer.
-     */
 
     if (timer) {
 
@@ -971,10 +973,6 @@ function stopCurrentStream() {
 
     }
 
-
-    /*
-     * Stop camera/screen tracks.
-     */
 
     if (stream) {
 
@@ -991,10 +989,6 @@ function stopCurrentStream() {
     }
 
 
-    /*
-     * Remove video source.
-     */
-
     video.srcObject =
         null;
 
@@ -1007,31 +1001,21 @@ function stopCurrentStream() {
         "flex";
 
 
-    /*
-     * Reset buttons.
-     */
-
     meetBtn.disabled =
         false;
 
+
     cameraBtn.disabled =
         false;
+
 
     stopBtn.disabled =
         true;
 
 
-    /*
-     * Hide face box.
-     */
-
     faceBox.style.display =
         "none";
 
-
-    /*
-     * Clear predictions.
-     */
 
     predictionHistory = [];
 
@@ -1049,20 +1033,12 @@ async function startStream(
     message
 ) {
 
-    /*
-     * Stop any previous stream.
-     */
-
     stopCurrentStream();
 
 
     stream =
         newStream;
 
-
-    /*
-     * Attach stream to video.
-     */
 
     video.srcObject =
         stream;
@@ -1080,23 +1056,17 @@ async function startStream(
         true;
 
 
-    /*
-     * Update buttons.
-     */
-
     meetBtn.disabled =
         true;
+
 
     cameraBtn.disabled =
         true;
 
+
     stopBtn.disabled =
         false;
 
-
-    /*
-     * Reset previous result.
-     */
 
     resetResult();
 
@@ -1107,7 +1077,7 @@ async function startStream(
 
 
     /*
-     * Analyze every 1.5 seconds.
+     * Analyze once every 1.5 seconds.
      */
 
     timer =
@@ -1116,11 +1086,6 @@ async function startStream(
             1500
         );
 
-
-    /*
-     * Detect when the shared screen/camera
-     * is stopped externally.
-     */
 
     const videoTrack =
         stream.getVideoTracks()[0];
@@ -1295,35 +1260,12 @@ stopBtn.addEventListener(
 
 
 /* ============================================================
-   WINDOW CLOSE
+   CLEANUP
 ============================================================ */
 
 window.addEventListener(
     "beforeunload",
     stopCurrentStream
-);
-
-
-/* ============================================================
-   WINDOW RESIZE
-============================================================ */
-
-/*
- * Recalculate the face-box position if the browser
- * window is resized.
- */
-
-window.addEventListener(
-    "resize",
-    () => {
-
-        /*
-         * The latest backend result is not stored separately,
-         * so the next analysis frame will redraw the box
-         * using the new dimensions.
-         */
-
-    }
 );
 
 </script>
