@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "FakeShield - Deepfake Detector",
+  "version": "1.0",
+  "description": "Real-time deepfake detection HUD overlay for Google Meet",
+  "permissions": ["activeTab"],
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
