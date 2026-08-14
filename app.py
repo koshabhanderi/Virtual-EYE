@@ -34,7 +34,6 @@ YUNET_PATH = (
 
 app = Flask(__name__)
 
-# Maximum request size: 8 MB
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 
 
@@ -56,7 +55,6 @@ try:
 
     print("Loading FakeShield Xception ONNX model...")
 
-    # Use CPU only.
     session = ort.InferenceSession(
         str(XCEPTION_ONNX_PATH),
         providers=["CPUExecutionProvider"]
@@ -88,7 +86,6 @@ try:
         ]
     )
 
-
 except Exception as exc:
 
     session = None
@@ -101,7 +98,7 @@ except Exception as exc:
 
 
 # ============================================================
-# YuNet FACE DETECTOR
+# YUNET FACE DETECTOR
 # ============================================================
 
 face_detector = None
@@ -131,7 +128,6 @@ try:
         "YuNet loaded successfully."
     )
 
-
 except Exception as exc:
 
     face_detector = None
@@ -158,7 +154,7 @@ def predict_face(face_bgr):
         )
 
     # --------------------------------------------------------
-    # Resize face
+    # Resize
     # --------------------------------------------------------
 
     face = cv2.resize(
@@ -177,7 +173,7 @@ def predict_face(face_bgr):
     )
 
     # --------------------------------------------------------
-    # Convert to float
+    # Normalize
     # --------------------------------------------------------
 
     face = face.astype(
@@ -202,7 +198,7 @@ def predict_face(face_bgr):
         axis=0
     )
 
-    # Make sure array is contiguous.
+    # Make contiguous float32 array.
     face = np.ascontiguousarray(
         face,
         dtype=np.float32
@@ -235,14 +231,8 @@ def predict_face(face_bgr):
             "ONNX model returned no output."
         )
 
-    output = outputs[0]
-
-    # --------------------------------------------------------
-    # Convert output to scalar
-    # --------------------------------------------------------
-
     output = np.asarray(
-        output
+        outputs[0]
     )
 
     output = output.squeeze()
@@ -253,19 +243,12 @@ def predict_face(face_bgr):
             "ONNX model returned an empty output."
         )
 
-    # Take first value if necessary.
     raw_value = float(
         output.reshape(-1)[0]
     )
 
     # --------------------------------------------------------
-    # Apply sigmoid
-    #
-    # The original PyTorch code used:
-    #
-    # torch.sigmoid(output)
-    #
-    # so we reproduce that here.
+    # Convert model output to probability
     # --------------------------------------------------------
 
     raw_value = np.clip(
@@ -274,12 +257,39 @@ def predict_face(face_bgr):
         50.0
     )
 
-    fake_probability = (
+    probability = (
         1.0 /
         (
             1.0 +
             np.exp(-raw_value)
         )
+    )
+
+    # --------------------------------------------------------
+    # IMPORTANT:
+    #
+    # Based on the observed behavior of the current model,
+    # treat the sigmoid output as REAL probability and invert
+    # it to obtain FAKE probability.
+    # --------------------------------------------------------
+
+    real_probability = float(
+        probability
+    )
+
+    fake_probability = (
+        1.0 -
+        real_probability
+    )
+
+    print(
+        "Model probabilities:",
+        "REAL =",
+        round(real_probability * 100, 2),
+        "%",
+        "FAKE =",
+        round(fake_probability * 100, 2),
+        "%"
     )
 
     return float(
@@ -299,10 +309,7 @@ def decode_image(data_url):
             "No image was supplied."
         )
 
-    # --------------------------------------------------------
-    # Handle data URL
-    # --------------------------------------------------------
-
+    # Handle data URL.
     if "," in data_url:
 
         _, encoded = data_url.split(
@@ -326,18 +333,10 @@ def decode_image(data_url):
             "Invalid base64 image data."
         ) from exc
 
-    # --------------------------------------------------------
-    # Convert bytes -> NumPy array
-    # --------------------------------------------------------
-
     array = np.frombuffer(
         raw,
         dtype=np.uint8
     )
-
-    # --------------------------------------------------------
-    # Decode JPEG/PNG
-    # --------------------------------------------------------
 
     frame = cv2.imdecode(
         array,
@@ -368,10 +367,7 @@ def detect_largest_face(frame):
 
     height, width = frame.shape[:2]
 
-    # --------------------------------------------------------
-    # Tell YuNet the current image size
-    # --------------------------------------------------------
-
+    # Tell YuNet current image size.
     face_detector.setInputSize(
         (
             int(width),
@@ -383,20 +379,12 @@ def detect_largest_face(frame):
         frame
     )
 
-    # --------------------------------------------------------
-    # No faces
-    # --------------------------------------------------------
-
     if faces is None or len(faces) == 0:
 
         return None, 0
 
     largest = None
     largest_area = 0
-
-    # --------------------------------------------------------
-    # Find largest face
-    # --------------------------------------------------------
 
     for face in faces:
 
@@ -406,7 +394,6 @@ def detect_largest_face(frame):
         h = int(face[3])
 
         # Keep coordinates inside image.
-
         x = max(
             0,
             x
@@ -428,7 +415,6 @@ def detect_largest_face(frame):
         )
 
         if w <= 0 or h <= 0:
-
             continue
 
         area = int(
@@ -455,33 +441,54 @@ def detect_largest_face(frame):
 # ============================================================
 # CLASSIFICATION
 # ============================================================
+
 def classify(fake_probability):
 
-    fake_probability = float(fake_probability)
+    fake_probability = float(
+        fake_probability
+    )
 
     fake_probability = max(
         0.0,
-        min(1.0, fake_probability)
+        min(
+            1.0,
+            fake_probability
+        )
     )
 
-    real_probability = 1.0 - fake_probability
+    real_probability = (
+        1.0 -
+        fake_probability
+    )
 
-    # More sensitive thresholds
-    if fake_probability >= 0.40:
+    # --------------------------------------------------------
+    # Classification thresholds
+    #
+    # <= 45% fake  -> REAL
+    # 45-55%       -> UNCERTAIN
+    # >= 55% fake  -> FAKE
+    #
+    # This prevents small fluctuations around 40% from
+    # immediately being reported as FAKE.
+    # --------------------------------------------------------
+
+    if fake_probability >= 0.55:
 
         label = "FAKE"
 
-    elif fake_probability >= 0.30:
-
-        label = "UNCERTAIN"
-
-    else:
+    elif fake_probability <= 0.45:
 
         label = "REAL"
 
+    else:
+
+        label = "UNCERTAIN"
+
     return {
 
-        "label": str(label),
+        "label": str(
+            label
+        ),
 
         "fake_probability": float(
             round(
@@ -497,6 +504,7 @@ def classify(fake_probability):
             )
         )
     }
+
 
 # ============================================================
 # HOME PAGE
@@ -553,7 +561,7 @@ def predict():
     try:
 
         # ----------------------------------------------------
-        # Read JSON safely
+        # Read JSON
         # ----------------------------------------------------
 
         data = (
@@ -586,6 +594,11 @@ def predict():
             image_data
         )
 
+        print(
+            "Received prediction frame:",
+            frame.shape
+        )
+
         # ----------------------------------------------------
         # Detect face
         # ----------------------------------------------------
@@ -601,6 +614,10 @@ def predict():
         # ----------------------------------------------------
 
         if face_box is None:
+
+            print(
+                "No face detected."
+            )
 
             return jsonify({
 
@@ -629,6 +646,14 @@ def predict():
 
         face_count = int(
             face_count
+        )
+
+        print(
+            "Face detected:",
+            x,
+            y,
+            w,
+            h
         )
 
         # ----------------------------------------------------
@@ -686,7 +711,7 @@ def predict():
         )
 
         # ----------------------------------------------------
-        # Return result
+        # Response
         # ----------------------------------------------------
 
         response = {
