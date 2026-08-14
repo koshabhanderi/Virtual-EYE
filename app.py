@@ -455,49 +455,33 @@ def detect_largest_face(frame):
 # ============================================================
 # CLASSIFICATION
 # ============================================================
-
 def classify(fake_probability):
 
-    fake_probability = float(
-        fake_probability
-    )
-
-    # Keep probability between 0 and 1.
+    fake_probability = float(fake_probability)
 
     fake_probability = max(
         0.0,
-        min(
-            1.0,
-            fake_probability
-        )
+        min(1.0, fake_probability)
     )
 
-    real_probability = (
-        1.0 -
-        fake_probability
-    )
+    real_probability = 1.0 - fake_probability
 
-    # --------------------------------------------------------
-    # Decision thresholds
-    # --------------------------------------------------------
-
-    if fake_probability >= 0.80:
+    # More sensitive thresholds
+    if fake_probability >= 0.40:
 
         label = "FAKE"
 
-    elif fake_probability <= 0.55:
-
-        label = "REAL"
-
-    else:
+    elif fake_probability >= 0.30:
 
         label = "UNCERTAIN"
 
+    else:
+
+        label = "REAL"
+
     return {
 
-        "label": str(
-            label
-        ),
+        "label": str(label),
 
         "fake_probability": float(
             round(
@@ -513,7 +497,6 @@ def classify(fake_probability):
             )
         )
     }
-
 
 # ============================================================
 # HOME PAGE
