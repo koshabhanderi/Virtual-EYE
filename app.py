@@ -1,7 +1,15 @@
 import os
+
+# Reduce CPU/thread memory usage on Render Free
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["MALLOC_ARENA_MAX"] = "2"
+
 import sys
 import base64
-import json
 from pathlib import Path
 
 import cv2
@@ -71,6 +79,10 @@ def json_response(data, status=200):
 # ============================================================
 
 DEVICE = torch.device("cpu")
+
+# Keep PyTorch from creating large CPU thread pools
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
 
 MODEL_CONFIG = {
     "mode": "original",
@@ -264,7 +276,7 @@ def predict_face(face_bgr):
         face
     ).to(DEVICE)
 
-    with torch.no_grad():
+    with torch.inference_mode():
 
         result = model(
             tensor
