@@ -133,9 +133,7 @@ def load_model():
 
             if key.startswith("backbone."):
 
-                new_key = key[
-                    len("backbone."):]
-                ]
+                new_key = key[len("backbone."):]
 
             else:
 
