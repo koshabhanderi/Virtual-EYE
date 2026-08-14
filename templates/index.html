@@ -1,10 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FakeShield - AI Face Authenticity Detection</title>
-    <link rel="stylesheet" href="/static/style.css">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        FakeShield - AI Face Authenticity Detection
+    </title>
+
+    <link rel="stylesheet"
+          href="/static/style.css">
+
 </head>
 
 <body>
@@ -12,47 +22,104 @@
 <div class="container">
 
     <header>
-        <div class="badge">AI-POWERED DEEPFAKE DETECTION</div>
-        <h1>🛡️ FakeShield</h1>
-        <p>AI Face Authenticity Detection</p>
+
+        <div class="badge">
+            AI-POWERED DEEPFAKE DETECTION
+        </div>
+
+        <h1>
+            🛡️ FakeShield
+        </h1>
+
+        <p>
+            AI Face Authenticity Detection
+        </p>
+
     </header>
+
 
     <main>
 
+        <!-- CAMERA / SCREEN SECTION -->
+
         <section class="camera-card">
 
-            <video id="video" autoplay playsinline></video>
-            <canvas id="canvas" hidden></canvas>
+            <video id="video"
+                   autoplay
+                   playsinline>
+            </video>
 
-            <div id="cameraPlaceholder" class="placeholder">
-                <div class="camera-icon">📺</div>
-                <h2>No video source selected</h2>
-                <p>Use your webcam or share your Google Meet window.</p>
+            <canvas id="canvas"
+                    hidden>
+            </canvas>
+
+
+            <div id="cameraPlaceholder"
+                 class="placeholder">
+
+                <div class="camera-icon">
+                    📺
+                </div>
+
+                <h2>
+                    No video source selected
+                </h2>
+
+                <p>
+                    Use your webcam or share your
+                    Google Meet window.
+                </p>
+
             </div>
 
-            <div id="faceBox" class="face-box"></div>
 
-            <div id="status" class="status">
+            <div id="faceBox"
+                 class="face-box">
+            </div>
+
+
+            <div id="status"
+                 class="status">
+
                 Ready
+
             </div>
 
         </section>
+
+
+        <!-- CONTROLS -->
 
         <section class="controls">
 
-            <button id="meetBtn" class="primary">
+            <button id="meetBtn"
+                    class="primary">
+
                 Share Google Meet
+
             </button>
 
-            <button id="cameraBtn" class="secondary">
+
+            <button id="cameraBtn"
+                    class="secondary">
+
                 Use Webcam
+
             </button>
 
-            <button id="stopBtn" class="secondary" disabled>
+
+            <button id="stopBtn"
+                    class="secondary"
+                    disabled>
+
                 Stop
+
             </button>
 
         </section>
+
+
+        <!-- RESULT -->
 
         <section class="result-card">
 
@@ -60,23 +127,44 @@
                 ANALYSIS RESULT
             </div>
 
-            <div id="resultLabel" class="result-label">
+
+            <div id="resultLabel"
+                 class="result-label">
+
                 WAITING
+
             </div>
+
 
             <div class="probabilities">
 
                 <div>
-                    <span>REAL</span>
-                    <strong id="realValue">--</strong>
+
+                    <span>
+                        REAL
+                    </span>
+
+                    <strong id="realValue">
+                        --
+                    </strong>
+
                 </div>
 
+
                 <div>
-                    <span>FAKE</span>
-                    <strong id="fakeValue">--</strong>
+
+                    <span>
+                        FAKE
+                    </span>
+
+                    <strong id="fakeValue">
+                        --
+                    </strong>
+
                 </div>
 
             </div>
+
 
             <p id="faceInfo">
                 No analysis performed yet.
@@ -84,145 +172,301 @@
 
         </section>
 
+
+        <!-- INFORMATION -->
+
         <section class="info">
 
-            <h2>How it works</h2>
+            <h2>
+                How it works
+            </h2>
+
 
             <div class="steps">
 
                 <div>
-                    <span>1</span>
-                    <p>Share your Google Meet window or browser tab.</p>
+
+                    <span>
+                        1
+                    </span>
+
+                    <p>
+                        Share your Google Meet window
+                        or browser tab.
+                    </p>
+
                 </div>
 
-                <div>
-                    <span>2</span>
-                    <p>YuNet detects visible faces in the shared video.</p>
-                </div>
 
                 <div>
-                    <span>3</span>
-                    <p>The largest visible face is analyzed by Xception.</p>
+
+                    <span>
+                        2
+                    </span>
+
+                    <p>
+                        YuNet detects visible faces
+                        in the shared video.
+                    </p>
+
                 </div>
 
+
                 <div>
-                    <span>4</span>
-                    <p>FakeShield reports REAL, UNCERTAIN, or FAKE.</p>
+
+                    <span>
+                        3
+                    </span>
+
+                    <p>
+                        The largest visible face is
+                        analyzed by Xception.
+                    </p>
+
+                </div>
+
+
+                <div>
+
+                    <span>
+                        4
+                    </span>
+
+                    <p>
+                        FakeShield reports REAL,
+                        UNCERTAIN, or FAKE.
+                    </p>
+
                 </div>
 
             </div>
 
         </section>
 
+
         <footer>
+
             FakeShield • AI Face Authenticity Detection
+
         </footer>
 
     </main>
 
 </div>
 
+
 <script>
 
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
+/* ============================================================
+   ELEMENTS
+   ============================================================ */
 
-const meetBtn = document.getElementById("meetBtn");
-const cameraBtn = document.getElementById("cameraBtn");
-const stopBtn = document.getElementById("stopBtn");
+const video =
+    document.getElementById("video");
 
-const statusText = document.getElementById("status");
-const resultLabel = document.getElementById("resultLabel");
+const canvas =
+    document.getElementById("canvas");
 
-const realValue = document.getElementById("realValue");
-const fakeValue = document.getElementById("fakeValue");
+const meetBtn =
+    document.getElementById("meetBtn");
 
-const faceInfo = document.getElementById("faceInfo");
-const faceBox = document.getElementById("faceBox");
-const placeholder = document.getElementById("cameraPlaceholder");
+const cameraBtn =
+    document.getElementById("cameraBtn");
+
+const stopBtn =
+    document.getElementById("stopBtn");
+
+const statusText =
+    document.getElementById("status");
+
+const resultLabel =
+    document.getElementById("resultLabel");
+
+const realValue =
+    document.getElementById("realValue");
+
+const fakeValue =
+    document.getElementById("fakeValue");
+
+const faceInfo =
+    document.getElementById("faceInfo");
+
+const faceBox =
+    document.getElementById("faceBox");
+
+const placeholder =
+    document.getElementById("cameraPlaceholder");
+
+
+/* ============================================================
+   VARIABLES
+   ============================================================ */
 
 let stream = null;
+
 let running = false;
+
 let busy = false;
+
 let timer = null;
 
 
+/* ============================================================
+   STATUS
+   ============================================================ */
+
 function setStatus(text) {
+
     statusText.textContent = text;
+
 }
 
 
+/* ============================================================
+   RESET RESULT
+   ============================================================ */
+
 function resetResult() {
 
-    resultLabel.textContent = "WAITING";
-    resultLabel.className = "result-label";
+    resultLabel.textContent =
+        "WAITING";
 
-    realValue.textContent = "--";
-    fakeValue.textContent = "--";
+    resultLabel.className =
+        "result-label";
+
+
+    realValue.textContent =
+        "--";
+
+    fakeValue.textContent =
+        "--";
+
 
     faceInfo.textContent =
         "No analysis performed yet.";
 
-    faceBox.style.display = "none";
+
+    faceBox.style.display =
+        "none";
+
 }
 
+
+/* ============================================================
+   DRAW FACE BOX
+   ============================================================ */
 
 function drawFaceBox(result) {
 
     if (!result.box) {
-        faceBox.style.display = "none";
+
+        faceBox.style.display =
+            "none";
+
         return;
+
     }
 
-    if (!video.videoWidth || !video.videoHeight) {
+
+    if (
+        !video.videoWidth ||
+        !video.videoHeight
+    ) {
+
         return;
+
     }
+
 
     const scaleX =
-        video.clientWidth / video.videoWidth;
+        video.clientWidth /
+        video.videoWidth;
+
 
     const scaleY =
-        video.clientHeight / video.videoHeight;
+        video.clientHeight /
+        video.videoHeight;
+
 
     faceBox.style.left =
         `${result.box.x * scaleX}px`;
 
+
     faceBox.style.top =
         `${result.box.y * scaleY}px`;
+
 
     faceBox.style.width =
         `${result.box.w * scaleX}px`;
 
+
     faceBox.style.height =
         `${result.box.h * scaleY}px`;
 
-    faceBox.style.display = "block";
+
+    faceBox.style.display =
+        "block";
+
 }
 
 
+/* ============================================================
+   DISPLAY RESULT
+   ============================================================ */
+
 function displayResult(result) {
 
-    if (!result.face_detected) {
+    if (!result) {
 
-        resultLabel.textContent = "NO FACE";
+        resultLabel.textContent =
+            "ERROR";
+
         resultLabel.className =
             "result-label uncertain";
 
-        realValue.textContent = "--";
-        fakeValue.textContent = "--";
+        faceInfo.textContent =
+            "No result received from server.";
+
+        faceBox.style.display =
+            "none";
+
+        return;
+
+    }
+
+
+    if (!result.face_detected) {
+
+        resultLabel.textContent =
+            "NO FACE";
+
+        resultLabel.className =
+            "result-label uncertain";
+
+
+        realValue.textContent =
+            "--";
+
+        fakeValue.textContent =
+            "--";
+
 
         faceInfo.textContent =
             result.message ||
             "No face detected.";
 
-        faceBox.style.display = "none";
+
+        faceBox.style.display =
+            "none";
 
         return;
+
     }
 
 
     resultLabel.textContent =
         result.label;
+
 
     resultLabel.className =
         "result-label " +
@@ -231,6 +475,7 @@ function displayResult(result) {
 
     realValue.textContent =
         result.real_probability + "%";
+
 
     fakeValue.textContent =
         result.fake_probability + "%";
@@ -242,61 +487,102 @@ function displayResult(result) {
 
 
     drawFaceBox(result);
+
 }
 
 
+/* ============================================================
+   ANALYZE FRAME
+   ============================================================ */
+
 async function analyzeFrame() {
 
+    /*
+     * Do not start another request while the previous
+     * request is still running.
+     */
+
     if (!running || busy) {
+
         return;
+
     }
+
+
+    /*
+     * Make sure video has a usable frame.
+     */
 
     if (
         !video.videoWidth ||
         !video.videoHeight
     ) {
+
         return;
+
     }
 
 
     busy = true;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-
-    const ctx =
-        canvas.getContext("2d");
-
-    ctx.drawImage(
-        video,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
-
-
-    const image =
-        canvas.toDataURL(
-            "image/jpeg",
-            0.80
-        );
-
 
     try {
 
-        setStatus("Analyzing...");
+        /* ----------------------------------------------------
+           PREPARE CANVAS
+           ---------------------------------------------------- */
+
+        canvas.width =
+            video.videoWidth;
+
+        canvas.height =
+            video.videoHeight;
+
+
+        const ctx =
+            canvas.getContext("2d");
+
+
+        ctx.drawImage(
+            video,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+
+        /* ----------------------------------------------------
+           CONVERT FRAME TO JPEG
+           ---------------------------------------------------- */
+
+        const image =
+            canvas.toDataURL(
+                "image/jpeg",
+                0.70
+            );
+
+
+        setStatus(
+            "Analyzing..."
+        );
+
+
+        /* ----------------------------------------------------
+           SEND IMAGE TO FLASK
+           ---------------------------------------------------- */
 
         const response =
             await fetch(
                 "/predict",
                 {
                     method: "POST",
+
                     headers: {
                         "Content-Type":
                             "application/json"
                     },
+
                     body: JSON.stringify({
                         image: image
                     })
@@ -304,44 +590,163 @@ async function analyzeFrame() {
             );
 
 
-        const result =
-            await response.json();
+        /* ----------------------------------------------------
+           IMPORTANT:
 
+           Do NOT immediately use response.json().
+
+           Render may sometimes return HTML instead of JSON
+           when an error/timeout occurs.
+
+           Reading text first allows us to see what the
+           server actually returned.
+           ---------------------------------------------------- */
+
+        const responseText =
+            await response.text();
+
+
+        console.log(
+            "Prediction HTTP status:",
+            response.status
+        );
+
+
+        console.log(
+            "Prediction response:",
+            responseText
+        );
+
+
+        /* ----------------------------------------------------
+           CONVERT RESPONSE TO JSON SAFELY
+           ---------------------------------------------------- */
+
+        let result;
+
+
+        try {
+
+            result =
+                JSON.parse(
+                    responseText
+                );
+
+        } catch (jsonError) {
+
+            console.error(
+                "Server did not return valid JSON:",
+                jsonError
+            );
+
+
+            console.error(
+                "Raw server response:",
+                responseText
+            );
+
+
+            throw new Error(
+                "Server returned an invalid response " +
+                `(${response.status}). ` +
+                "Please check the Render logs."
+            );
+
+        }
+
+
+        /* ----------------------------------------------------
+           CHECK HTTP STATUS
+           ---------------------------------------------------- */
 
         if (!response.ok) {
 
             throw new Error(
                 result.error ||
-                "Prediction failed."
+                result.message ||
+                `Server error (${response.status})`
             );
+
         }
 
 
-        displayResult(result);
+        /* ----------------------------------------------------
+           CHECK APPLICATION ERROR
+           ---------------------------------------------------- */
 
-        setStatus("Live analysis");
+        if (
+            result.ok === false &&
+            result.error
+        ) {
+
+            throw new Error(
+                result.error
+            );
+
+        }
+
+
+        /* ----------------------------------------------------
+           DISPLAY RESULT
+           ---------------------------------------------------- */
+
+        displayResult(
+            result
+        );
+
+
+        setStatus(
+            "Live analysis"
+        );
 
 
     } catch (error) {
 
-        setStatus(
-            "Error: " + error.message
+        console.error(
+            "Prediction error:",
+            error
         );
+
+
+        setStatus(
+            "Prediction error"
+        );
+
+
+        faceInfo.textContent =
+            error.message;
+
+
+        faceBox.style.display =
+            "none";
+
 
     } finally {
 
         busy = false;
+
     }
+
 }
 
+
+/* ============================================================
+   STOP CURRENT STREAM
+   ============================================================ */
 
 function stopCurrentStream() {
 
     running = false;
 
+
     if (timer) {
-        clearInterval(timer);
+
+        clearInterval(
+            timer
+        );
+
         timer = null;
+
     }
 
 
@@ -353,80 +758,165 @@ function stopCurrentStream() {
                 track => track.stop()
             );
 
+
         stream = null;
+
     }
 
 
-    video.srcObject = null;
+    video.srcObject =
+        null;
 
-    video.style.display = "none";
-    placeholder.style.display = "flex";
 
-    meetBtn.disabled = false;
-    cameraBtn.disabled = false;
-    stopBtn.disabled = true;
+    video.style.display =
+        "none";
 
-    faceBox.style.display = "none";
+
+    placeholder.style.display =
+        "flex";
+
+
+    meetBtn.disabled =
+        false;
+
+
+    cameraBtn.disabled =
+        false;
+
+
+    stopBtn.disabled =
+        true;
+
+
+    faceBox.style.display =
+        "none";
+
 }
 
 
-async function startStream(newStream, message) {
+/* ============================================================
+   START STREAM
+   ============================================================ */
+
+async function startStream(
+    newStream,
+    message
+) {
 
     stopCurrentStream();
 
-    stream = newStream;
 
-    video.srcObject = stream;
+    stream =
+        newStream;
 
-    video.style.display = "block";
-    placeholder.style.display = "none";
 
-    running = true;
+    video.srcObject =
+        stream;
 
-    meetBtn.disabled = true;
-    cameraBtn.disabled = true;
-    stopBtn.disabled = false;
+
+    video.style.display =
+        "block";
+
+
+    placeholder.style.display =
+        "none";
+
+
+    running =
+        true;
+
+
+    meetBtn.disabled =
+        true;
+
+
+    cameraBtn.disabled =
+        true;
+
+
+    stopBtn.disabled =
+        false;
+
 
     resetResult();
 
-    setStatus(message);
 
-    timer = setInterval(
-        analyzeFrame,
-        1500
+    setStatus(
+        message
     );
 
 
+    /*
+     * Analyze one frame every 1.5 seconds.
+     */
+
+    timer =
+        setInterval(
+            analyzeFrame,
+            1500
+        );
+
+
+    /*
+     * Detect when the user stops sharing.
+     */
+
     const videoTrack =
         stream.getVideoTracks()[0];
+
 
     if (videoTrack) {
 
         videoTrack.addEventListener(
             "ended",
             () => {
+
                 stopCurrentStream();
-                setStatus("Shared video ended");
+
+                setStatus(
+                    "Shared video ended"
+                );
+
             }
         );
+
     }
+
 }
 
+
+/* ============================================================
+   SHARE GOOGLE MEET
+   ============================================================ */
 
 async function shareGoogleMeet() {
 
     try {
 
+        setStatus(
+            "Opening screen sharing..."
+        );
+
+
         const newStream =
-            await navigator.mediaDevices.getDisplayMedia({
-                video: {
-                    frameRate: {
-                        ideal: 10,
-                        max: 15
-                    }
-                },
-                audio: false
-            });
+            await navigator.mediaDevices
+                .getDisplayMedia({
+
+                    video: {
+
+                        frameRate: {
+
+                            ideal: 10,
+
+                            max: 15
+
+                        }
+
+                    },
+
+                    audio: false
+
+                });
 
 
         await startStream(
@@ -437,33 +927,64 @@ async function shareGoogleMeet() {
 
     } catch (error) {
 
+        console.error(
+            "Screen sharing error:",
+            error
+        );
+
+
         setStatus(
             "Screen sharing cancelled."
         );
 
+
         faceInfo.textContent =
             error.message;
+
     }
+
 }
 
+
+/* ============================================================
+   USE WEBCAM
+   ============================================================ */
 
 async function useWebcam() {
 
     try {
 
+        setStatus(
+            "Opening webcam..."
+        );
+
+
         const newStream =
-            await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: "user",
-                    width: {
-                        ideal: 1280
+            await navigator.mediaDevices
+                .getUserMedia({
+
+                    video: {
+
+                        facingMode:
+                            "user",
+
+                        width: {
+
+                            ideal: 1280
+
+                        },
+
+                        height: {
+
+                            ideal: 720
+
+                        }
+
                     },
-                    height: {
-                        ideal: 720
-                    }
-                },
-                audio: false
-            });
+
+                    audio: false
+
+                });
 
 
         await startStream(
@@ -474,35 +995,60 @@ async function useWebcam() {
 
     } catch (error) {
 
+        console.error(
+            "Webcam error:",
+            error
+        );
+
+
         setStatus(
             "Camera permission denied or unavailable."
         );
 
+
         faceInfo.textContent =
             error.message;
+
     }
+
 }
 
+
+/* ============================================================
+   BUTTON EVENTS
+   ============================================================ */
 
 meetBtn.addEventListener(
     "click",
     shareGoogleMeet
 );
 
+
 cameraBtn.addEventListener(
     "click",
     useWebcam
 );
 
+
 stopBtn.addEventListener(
     "click",
     () => {
+
         stopCurrentStream();
+
         resetResult();
-        setStatus("Stopped");
+
+        setStatus(
+            "Stopped"
+        );
+
     }
 );
 
+
+/* ============================================================
+   CLEANUP
+   ============================================================ */
 
 window.addEventListener(
     "beforeunload",
@@ -512,4 +1058,5 @@ window.addEventListener(
 </script>
 
 </body>
+
 </html>
