@@ -1,195 +1,25 @@
 import os
-
-# Reduce CPU/thread memory usage on Render Free
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-os.environ["NUMEXPR_NUM_THREADS"] = "1"
-os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
-os.environ["MALLOC_ARENA_MAX"] = "2"
-
 import sys
 import base64
 from pathlib import Path
 
 import cv2
 import numpy as np
-import torch
+import onnxruntime as ort
 from flask import Flask, jsonify, render_template, request
 
 
 # ============================================================
-# Paths
+# PATHS
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
 
-DEEPFAKEBENCH_TRAINING = (
-    BASE_DIR / "DeepfakeBench" / "training"
+XCEPTION_ONNX_PATH = (
+    BASE_DIR
+    / "ai_face_weights"
+    / "xception_ai_face.onnx"
 )
-
-CHECKPOINT_PATH = (
-    BASE_DIR / "ai_face_weights" / "xception_ai_face.pth"
-)
-
-sys.path.insert(
-    0,
-    str(DEEPFAKEBENCH_TRAINING)
-)
-
-from networks.xception import Xception
-
-
-# ============================================================
-# Flask
-# ============================================================
-
-app = Flask(__name__)
-
-app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
-
-
-# ============================================================
-# JSON RESPONSE HELPER
-# ============================================================
-
-def json_response(data, status=200):
-
-    response = app.response_class(
-        response=json.dumps(
-            data,
-            separators=(",", ":")
-        ),
-        status=status,
-        mimetype="application/json"
-    )
-
-    # Do NOT manually specify Content-Length.
-    # Render/Gunicorn will handle it.
-    response.headers.pop(
-        "Content-Length",
-        None
-    )
-
-    return response
-
-
-# ============================================================
-# Model
-# ============================================================
-
-DEVICE = torch.device("cpu")
-
-# Keep PyTorch from creating large CPU thread pools
-torch.set_num_threads(1)
-torch.set_num_interop_threads(1)
-
-MODEL_CONFIG = {
-    "mode": "original",
-    "num_classes": 1,
-    "inc": 3,
-    "dropout": False,
-}
-
-model = None
-model_error = None
-
-
-def load_model():
-
-    global model
-    global model_error
-
-    try:
-
-        if not CHECKPOINT_PATH.exists():
-
-            raise FileNotFoundError(
-                f"Checkpoint not found: {CHECKPOINT_PATH}"
-            )
-
-        print(
-            "Loading FakeShield Xception model..."
-        )
-
-        model = Xception(
-            MODEL_CONFIG
-        )
-
-        checkpoint = torch.load(
-            CHECKPOINT_PATH,
-            map_location="cpu"
-        )
-
-        # Handle common checkpoint formats.
-        if isinstance(
-            checkpoint,
-            dict
-        ):
-
-            if "state_dict" in checkpoint:
-
-                checkpoint = (
-                    checkpoint["state_dict"]
-                )
-
-            elif "model_state_dict" in checkpoint:
-
-                checkpoint = (
-                    checkpoint["model_state_dict"]
-                )
-
-        new_checkpoint = {}
-
-        for key, value in checkpoint.items():
-
-            if key.startswith("backbone."):
-
-                new_key = key[len("backbone."):]
-
-            else:
-
-                new_key = key
-
-            new_checkpoint[
-                new_key
-            ] = value
-
-        model.load_state_dict(
-            new_checkpoint,
-            strict=True
-        )
-
-        model.to(
-            DEVICE
-        )
-
-        model.eval()
-
-        print(
-            "FakeShield model loaded successfully."
-        )
-
-    except Exception as exc:
-
-        model = None
-
-        model_error = str(
-            exc
-        )
-
-        print(
-            "MODEL LOAD ERROR:",
-            exc
-        )
-
-
-load_model()
-
-
-# ============================================================
-# YuNet Face Detector
-# ============================================================
 
 YUNET_PATH = (
     BASE_DIR
@@ -197,17 +27,96 @@ YUNET_PATH = (
     / "face_detection_yunet_2026may.onnx"
 )
 
+
+# ============================================================
+# FLASK
+# ============================================================
+
+app = Flask(__name__)
+
+# Maximum request size: 8 MB
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
+
+
+# ============================================================
+# XCEPTION ONNX MODEL
+# ============================================================
+
+session = None
+model_error = None
+
+try:
+
+    if not XCEPTION_ONNX_PATH.exists():
+
+        raise FileNotFoundError(
+            f"Xception ONNX model not found: "
+            f"{XCEPTION_ONNX_PATH}"
+        )
+
+    print("Loading FakeShield Xception ONNX model...")
+
+    # Use CPU only.
+    session = ort.InferenceSession(
+        str(XCEPTION_ONNX_PATH),
+        providers=["CPUExecutionProvider"]
+    )
+
+    print(
+        "FakeShield Xception ONNX model "
+        "loaded successfully."
+    )
+
+    print(
+        "ONNX providers:",
+        session.get_providers()
+    )
+
+    print(
+        "ONNX inputs:",
+        [
+            inp.name
+            for inp in session.get_inputs()
+        ]
+    )
+
+    print(
+        "ONNX outputs:",
+        [
+            out.name
+            for out in session.get_outputs()
+        ]
+    )
+
+
+except Exception as exc:
+
+    session = None
+    model_error = str(exc)
+
+    print(
+        "MODEL LOAD ERROR:",
+        exc
+    )
+
+
+# ============================================================
+# YuNet FACE DETECTOR
+# ============================================================
+
 face_detector = None
 yunet_error = None
-
 
 try:
 
     if not YUNET_PATH.exists():
 
         raise FileNotFoundError(
-            f"YuNet model not found: {YUNET_PATH}"
+            f"YuNet model not found: "
+            f"{YUNET_PATH}"
         )
+
+    print("Loading YuNet...")
 
     face_detector = cv2.FaceDetectorYN.create(
         str(YUNET_PATH),
@@ -222,11 +131,11 @@ try:
         "YuNet loaded successfully."
     )
 
+
 except Exception as exc:
 
-    yunet_error = str(
-        exc
-    )
+    face_detector = None
+    yunet_error = str(exc)
 
     print(
         "YUNET LOAD ERROR:",
@@ -235,17 +144,22 @@ except Exception as exc:
 
 
 # ============================================================
-# Face Prediction
+# PREDICT FACE USING ONNX
 # ============================================================
 
 def predict_face(face_bgr):
 
-    if model is None:
+    if session is None:
 
         raise RuntimeError(
             model_error
-            or "FakeShield model is not loaded."
+            or "FakeShield ONNX model "
+               "is not loaded."
         )
+
+    # --------------------------------------------------------
+    # Resize face
+    # --------------------------------------------------------
 
     face = cv2.resize(
         face_bgr,
@@ -253,46 +167,120 @@ def predict_face(face_bgr):
         interpolation=cv2.INTER_AREA
     )
 
+    # --------------------------------------------------------
+    # BGR -> RGB
+    # --------------------------------------------------------
+
     face = cv2.cvtColor(
         face,
         cv2.COLOR_BGR2RGB
     )
 
+    # --------------------------------------------------------
+    # Convert to float
+    # --------------------------------------------------------
+
     face = face.astype(
         np.float32
     ) / 255.0
+
+    # --------------------------------------------------------
+    # HWC -> CHW
+    # --------------------------------------------------------
 
     face = np.transpose(
         face,
         (2, 0, 1)
     )
 
+    # --------------------------------------------------------
+    # Add batch dimension
+    # --------------------------------------------------------
+
     face = np.expand_dims(
         face,
         axis=0
     )
 
-    tensor = torch.from_numpy(
-        face
-    ).to(DEVICE)
+    # Make sure array is contiguous.
+    face = np.ascontiguousarray(
+        face,
+        dtype=np.float32
+    )
 
-    with torch.inference_mode():
+    # --------------------------------------------------------
+    # Get input name
+    # --------------------------------------------------------
 
-        result = model(
-            tensor
+    input_name = (
+        session
+        .get_inputs()[0]
+        .name
+    )
+
+    # --------------------------------------------------------
+    # ONNX inference
+    # --------------------------------------------------------
+
+    outputs = session.run(
+        None,
+        {
+            input_name: face
+        }
+    )
+
+    if not outputs:
+
+        raise RuntimeError(
+            "ONNX model returned no output."
         )
 
-    output = (
-        result[0]
-        if isinstance(result, tuple)
-        else result
+    output = outputs[0]
+
+    # --------------------------------------------------------
+    # Convert output to scalar
+    # --------------------------------------------------------
+
+    output = np.asarray(
+        output
     )
 
     output = output.squeeze()
 
-    fake_probability = torch.sigmoid(
-        output
-    ).item()
+    if output.size == 0:
+
+        raise RuntimeError(
+            "ONNX model returned an empty output."
+        )
+
+    # Take first value if necessary.
+    raw_value = float(
+        output.reshape(-1)[0]
+    )
+
+    # --------------------------------------------------------
+    # Apply sigmoid
+    #
+    # The original PyTorch code used:
+    #
+    # torch.sigmoid(output)
+    #
+    # so we reproduce that here.
+    # --------------------------------------------------------
+
+    raw_value = np.clip(
+        raw_value,
+        -50.0,
+        50.0
+    )
+
+    fake_probability = (
+        1.0 /
+        (
+            1.0 +
+            np.exp(-raw_value)
+        )
+    )
 
     return float(
         fake_probability
@@ -300,7 +288,7 @@ def predict_face(face_bgr):
 
 
 # ============================================================
-# Decode Browser Image
+# DECODE BROWSER IMAGE
 # ============================================================
 
 def decode_image(data_url):
@@ -310,6 +298,10 @@ def decode_image(data_url):
         raise ValueError(
             "No image was supplied."
         )
+
+    # --------------------------------------------------------
+    # Handle data URL
+    # --------------------------------------------------------
 
     if "," in data_url:
 
@@ -322,14 +314,30 @@ def decode_image(data_url):
 
         encoded = data_url
 
-    raw = base64.b64decode(
-        encoded
-    )
+    try:
+
+        raw = base64.b64decode(
+            encoded
+        )
+
+    except Exception as exc:
+
+        raise ValueError(
+            "Invalid base64 image data."
+        ) from exc
+
+    # --------------------------------------------------------
+    # Convert bytes -> NumPy array
+    # --------------------------------------------------------
 
     array = np.frombuffer(
         raw,
         dtype=np.uint8
     )
+
+    # --------------------------------------------------------
+    # Decode JPEG/PNG
+    # --------------------------------------------------------
 
     frame = cv2.imdecode(
         array,
@@ -346,7 +354,7 @@ def decode_image(data_url):
 
 
 # ============================================================
-# Detect Largest Face
+# DETECT LARGEST FACE
 # ============================================================
 
 def detect_largest_face(frame):
@@ -358,9 +366,11 @@ def detect_largest_face(frame):
             or "YuNet is not loaded."
         )
 
-    height, width = (
-        frame.shape[:2]
-    )
+    height, width = frame.shape[:2]
+
+    # --------------------------------------------------------
+    # Tell YuNet the current image size
+    # --------------------------------------------------------
 
     face_detector.setInputSize(
         (
@@ -373,33 +383,29 @@ def detect_largest_face(frame):
         frame
     )
 
+    # --------------------------------------------------------
+    # No faces
+    # --------------------------------------------------------
+
     if faces is None or len(faces) == 0:
 
         return None, 0
 
     largest = None
-
     largest_area = 0
+
+    # --------------------------------------------------------
+    # Find largest face
+    # --------------------------------------------------------
 
     for face in faces:
 
-        x = int(
-            face[0]
-        )
+        x = int(face[0])
+        y = int(face[1])
+        w = int(face[2])
+        h = int(face[3])
 
-        y = int(
-            face[1]
-        )
-
-        w = int(
-            face[2]
-        )
-
-        h = int(
-            face[3]
-        )
-
-        # Keep box inside image.
+        # Keep coordinates inside image.
 
         x = max(
             0,
@@ -447,7 +453,7 @@ def detect_largest_face(frame):
 
 
 # ============================================================
-# Classification
+# CLASSIFICATION
 # ============================================================
 
 def classify(fake_probability):
@@ -456,9 +462,24 @@ def classify(fake_probability):
         fake_probability
     )
 
-    real_probability = float(
-        1.0 - fake_probability
+    # Keep probability between 0 and 1.
+
+    fake_probability = max(
+        0.0,
+        min(
+            1.0,
+            fake_probability
+        )
     )
+
+    real_probability = (
+        1.0 -
+        fake_probability
+    )
+
+    # --------------------------------------------------------
+    # Decision thresholds
+    # --------------------------------------------------------
 
     if fake_probability >= 0.80:
 
@@ -495,7 +516,7 @@ def classify(fake_probability):
 
 
 # ============================================================
-# Home Route
+# HOME PAGE
 # ============================================================
 
 @app.get("/")
@@ -507,7 +528,7 @@ def home():
 
 
 # ============================================================
-# Health Check
+# HEALTH CHECK
 # ============================================================
 
 @app.get("/health")
@@ -518,7 +539,7 @@ def health():
         "status": "ok",
 
         "model_loaded": bool(
-            model is not None
+            session is not None
         ),
 
         "yunet_loaded": bool(
@@ -540,13 +561,17 @@ def health():
 
 
 # ============================================================
-# Prediction
+# PREDICTION
 # ============================================================
 
 @app.post("/predict")
 def predict():
 
     try:
+
+        # ----------------------------------------------------
+        # Read JSON safely
+        # ----------------------------------------------------
 
         data = (
             request.get_json(
@@ -561,18 +586,26 @@ def predict():
 
         if not image_data:
 
-            return json_response({
+            return jsonify({
 
                 "ok": False,
 
                 "error":
                     "No image supplied."
 
-            }, 400)
+            }), 400
+
+        # ----------------------------------------------------
+        # Decode image
+        # ----------------------------------------------------
 
         frame = decode_image(
             image_data
         )
+
+        # ----------------------------------------------------
+        # Detect face
+        # ----------------------------------------------------
 
         face_box, face_count = (
             detect_largest_face(
@@ -581,26 +614,24 @@ def predict():
         )
 
         # ----------------------------------------------------
-        # No face detected
+        # No face
         # ----------------------------------------------------
 
         if face_box is None:
 
-            return json_response({
+            return jsonify({
 
                 "ok": True,
 
                 "face_detected": False,
 
-                "face_count": int(
-                    face_count
-                ),
+                "face_count":
+                    int(face_count),
 
                 "message":
                     "No face detected."
 
-            })
-
+            }), 200
 
         # ----------------------------------------------------
         # Get largest face
@@ -609,17 +640,13 @@ def predict():
         x, y, w, h = face_box
 
         x = int(x)
-
         y = int(y)
-
         w = int(w)
-
         h = int(h)
 
         face_count = int(
             face_count
         )
-
 
         # ----------------------------------------------------
         # Ignore very small faces
@@ -627,24 +654,23 @@ def predict():
 
         if w < 70 or h < 70:
 
-            return json_response({
+            return jsonify({
 
                 "ok": True,
 
                 "face_detected": False,
 
-                "face_count": int(
-                    face_count
-                ),
+                "face_count":
+                    int(face_count),
 
                 "message":
-                    "Face is too small for reliable analysis."
+                    "Face is too small "
+                    "for reliable analysis."
 
-            })
-
+            }), 200
 
         # ----------------------------------------------------
-        # Crop largest face
+        # Crop face
         # ----------------------------------------------------
 
         face_crop = frame[
@@ -652,9 +678,14 @@ def predict():
             x:x + w
         ]
 
+        if face_crop.size == 0:
+
+            raise ValueError(
+                "Invalid face crop."
+            )
 
         # ----------------------------------------------------
-        # AI classification
+        # AI prediction
         # ----------------------------------------------------
 
         fake_probability = (
@@ -663,24 +694,26 @@ def predict():
             )
         )
 
+        # ----------------------------------------------------
+        # Classification
+        # ----------------------------------------------------
+
         result = classify(
             fake_probability
         )
 
-
         # ----------------------------------------------------
-        # Final response
+        # Return result
         # ----------------------------------------------------
 
-        return json_response({
+        response = {
 
             "ok": True,
 
             "face_detected": True,
 
-            "face_count": int(
-                face_count
-            ),
+            "face_count":
+                int(face_count),
 
             "box": {
 
@@ -693,62 +726,100 @@ def predict():
                 "h": int(h)
             },
 
-            "label": str(
-                result["label"]
-            ),
+            "label":
+                str(
+                    result["label"]
+                ),
 
-            "fake_probability": float(
-                result[
-                    "fake_probability"
-                ]
-            ),
+            "fake_probability":
+                float(
+                    result[
+                        "fake_probability"
+                    ]
+                ),
 
-            "real_probability": float(
-                result[
-                    "real_probability"
-                ]
-            )
+            "real_probability":
+                float(
+                    result[
+                        "real_probability"
+                    ]
+                )
+        }
 
-        })
+        print(
+            "Prediction:",
+            response["label"],
+            "| Fake:",
+            response["fake_probability"],
+            "%",
+            "| Real:",
+            response["real_probability"],
+            "%"
+        )
 
+        return jsonify(
+            response
+        ), 200
 
     except Exception as exc:
 
         print(
             "PREDICTION ERROR:",
-            exc
+            repr(exc)
         )
 
-        return json_response({
+        return jsonify({
 
             "ok": False,
 
-            "error": str(
-                exc
-            )
+            "error":
+                str(exc)
 
-        }, 500)
+        }), 500
 
 
 # ============================================================
-# File Too Large
+# FILE TOO LARGE
 # ============================================================
 
 @app.errorhandler(413)
 def too_large(_error):
 
-    return json_response({
+    return jsonify({
 
         "ok": False,
 
         "error":
-            "Image is too large. Please use a smaller image."
+            "Image is too large. "
+            "Please use a smaller image."
 
-    }, 413)
+    }), 413
 
 
 # ============================================================
-# Run Application
+# GENERAL SERVER ERROR
+# ============================================================
+
+@app.errorhandler(500)
+def internal_error(error):
+
+    print(
+        "SERVER ERROR:",
+        repr(error)
+    )
+
+    return jsonify({
+
+        "ok": False,
+
+        "error":
+            "Internal server error."
+
+    }), 500
+
+
+# ============================================================
+# RUN
 # ============================================================
 
 if __name__ == "__main__":
