@@ -532,11 +532,17 @@ async function analyzeFrame() {
            PREPARE CANVAS
            ---------------------------------------------------- */
 
-        canvas.width =
-            video.videoWidth;
+        const maxWidth = 480;
+const maxHeight = 360;
 
-        canvas.height =
-            video.videoHeight;
+const scale = Math.min(
+    maxWidth / video.videoWidth,
+    maxHeight / video.videoHeight,
+    1
+);
+
+canvas.width = Math.round(video.videoWidth * scale);
+canvas.height = Math.round(video.videoHeight * scale);
 
 
         const ctx =
@@ -557,10 +563,10 @@ async function analyzeFrame() {
            ---------------------------------------------------- */
 
         const image =
-            canvas.toDataURL(
+                canvas.toDataURL(
                 "image/jpeg",
-                0.70
-            );
+                0.50
+         );
 
 
         setStatus(
@@ -572,117 +578,63 @@ async function analyzeFrame() {
            SEND IMAGE TO FLASK
            ---------------------------------------------------- */
 
-        const response =
-            await fetch(
-                "/predict",
-                {
-                    method: "POST",
+        const response = await fetch("/predict", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                image: image
+            })
+        });
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        image: image
-                    })
-                }
-            );
-
-
-        /* ----------------------------------------------------
-           IMPORTANT:
-
-           Do NOT immediately use response.json().
-
-           Render may sometimes return HTML instead of JSON
-           when an error/timeout occurs.
-
-           Reading text first allows us to see what the
-           server actually returned.
-           ---------------------------------------------------- */
-
-        const responseText =
-            await response.text();
-
+        const responseText = await response.text();
 
         console.log(
             "Prediction HTTP status:",
             response.status
         );
 
-
         console.log(
             "Prediction response:",
             responseText
         );
 
-
-        /* ----------------------------------------------------
-           CONVERT RESPONSE TO JSON SAFELY
-           ---------------------------------------------------- */
-
         let result;
 
-
         try {
-
-            result =
-                JSON.parse(
-                    responseText
-                );
-
+            result = JSON.parse(responseText);
         } catch (jsonError) {
-
             console.error(
                 "Server did not return valid JSON:",
                 jsonError
             );
-
 
             console.error(
                 "Raw server response:",
                 responseText
             );
 
-
             throw new Error(
-                "Server returned an invalid response " +
-                `(${response.status}). ` +
-                "Please check the Render logs."
+                `Server returned an invalid response (${response.status}).`
             );
-
         }
 
-
-        /* ----------------------------------------------------
-           CHECK HTTP STATUS
-           ---------------------------------------------------- */
-
         if (!response.ok) {
-
             throw new Error(
                 result.error ||
                 result.message ||
                 `Server error (${response.status})`
             );
-
         }
-
-
-        /* ----------------------------------------------------
-           CHECK APPLICATION ERROR
-           ---------------------------------------------------- */
 
         if (
             result.ok === false &&
             result.error
         ) {
-
             throw new Error(
                 result.error
             );
-
         }
 
 
@@ -847,13 +799,13 @@ async function startStream(
 
 
     /*
-     * Analyze one frame every 1.5 seconds.
+     * Analyze one frame every 5 seconds.
      */
 
     timer =
         setInterval(
             analyzeFrame,
-            1500
+            5000
         );
 
 
