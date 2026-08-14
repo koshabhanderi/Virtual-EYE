@@ -268,18 +268,17 @@ def predict_face(face_bgr):
     # --------------------------------------------------------
     # IMPORTANT:
     #
-    # Based on the observed behavior of the current model,
-    # treat the sigmoid output as REAL probability and invert
-    # it to obtain FAKE probability.
+    # Treat the sigmoid output from this checkpoint as FAKE
+    # probability. REAL probability is its complement.
     # --------------------------------------------------------
 
-    real_probability = float(
+    fake_probability = float(
         probability
     )
 
-    fake_probability = (
+    real_probability = (
         1.0 -
-        real_probability
+        fake_probability
     )
 
     print(
