@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+deepfake_env312/
+venv/
+.env
+
+# Training / datasets
+DeepfakeBench/training/data/
+DeepfakeBench/datasets/
+AI_Face_Test/
+ai_face_training/
+lfw_data/
+real/
+fake/
+
+# Generated results
+fakeshield_result_*.png
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
