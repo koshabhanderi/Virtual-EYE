@@ -27,4 +27,6 @@ fakeshield_result_*.png
 
 # OS
 .DS_Store
-Thumbs.db
+Thumbs.db__pycache__/
+*.pyc
+DeepfakeBench/training/weights/

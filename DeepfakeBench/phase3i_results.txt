@@ -1,0 +1,58 @@
+==============================================
+        FAKESHIELD - PHASE 3I REPORT
+==============================================
+
+PHASE 3G - NORMAL PREPROCESSING
+----------------------------------------------
+Total images: 20
+Correct predictions: 9
+Incorrect predictions: 11
+REAL images: 10
+FAKE images: 10
+REAL correctly detected: 8
+FAKE correctly detected: 1
+Accuracy: 45.00%
+False Positive Rate: 20.00%
+False Negative Rate: 90.00%
+Average inference time: 119.01 ms
+
+PHASE 3G - ALIGNED PREPROCESSING
+----------------------------------------------
+Total images: 20
+Correct predictions: 8
+Incorrect predictions: 12
+REAL images: 10
+FAKE images: 10
+REAL correctly detected: 8
+FAKE correctly detected: 0
+Accuracy: 40.00%
+False Positive Rate: 20.00%
+False Negative Rate: 100.00%
+Average inference time: 456.61 ms
+
+PHASE 3H - OFFICIAL BENCHMARK PREDICTIONS
+----------------------------------------------
+Benchmark images processed: 1000
+REAL predictions: 814
+FAKE predictions: 186
+Accuracy: NOT AVAILABLE
+Reason: benchmark ground-truth labels are hidden.
+
+PHASE 3G COMPARISON
+----------------------------------------------
+Better accuracy: Normal preprocessing
+
+OBSERVATIONS
+----------------------------------------------
+1. The model performs substantially better on REAL
+   images than on FAKE images in the Phase 3G test.
+2. The model shows a strong tendency to predict REAL.
+3. False-negative errors are high for FAKE images.
+4. Phase 3H cannot be assigned an accuracy score locally
+   because the benchmark ground-truth labels are hidden.
+5. Phase 3H predictions were successfully generated
+   for all 1000 benchmark images.
+
+==============================================
+              END OF REPORT
+==============================================
