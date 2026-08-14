@@ -1,21 +1,41 @@
+/* =========================================================
+   GLOBAL RESET
+========================================================= */
+
 * {
-    box-sizing: border-box;
     margin: 0;
     padding: 0;
+    box-sizing: border-box;
 }
+
+
+/* =========================================================
+   BODY
+========================================================= */
 
 body {
-    min-height: 100vh;
     font-family: Arial, sans-serif;
-    background: #07111f;
+    background: #06111f;
     color: #ffffff;
+    min-height: 100vh;
 }
 
+
+/* =========================================================
+   MAIN CONTAINER
+========================================================= */
+
 .container {
-    width: min(1100px, 94%);
+    width: 100%;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 35px 0;
+    padding: 30px 24px;
 }
+
+
+/* =========================================================
+   HEADER
+========================================================= */
 
 header {
     text-align: center;
@@ -24,228 +44,615 @@ header {
 
 .badge {
     display: inline-block;
-    padding: 7px 14px;
-    border: 1px solid #2d8cff;
-    border-radius: 30px;
+    padding: 8px 16px;
+    border: 1px solid #2d6cdf;
+    border-radius: 20px;
+    color: #76a9ff;
     font-size: 12px;
-    letter-spacing: 1px;
-    color: #8fc5ff;
+    font-weight: bold;
+    letter-spacing: 1.5px;
     margin-bottom: 15px;
 }
 
-h1 {
+header h1 {
     font-size: 48px;
     margin-bottom: 8px;
 }
 
 header p {
-    color: #aebdce;
+    color: #9db1ca;
     font-size: 18px;
 }
+
+
+/* =========================================================
+   CAMERA CARD
+========================================================= */
 
 .camera-card {
     position: relative;
     width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #02060b;
+    min-height: 500px;
+    background: #0b1a2d;
+    border: 1px solid #263d58;
     border-radius: 20px;
     overflow: hidden;
-    border: 1px solid #23354a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-video {
-    display: none;
+
+/* =========================================================
+   VIDEO
+========================================================= */
+
+#video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    min-height: 500px;
+
+    /*
+     * Important:
+     * Keep the complete video visible so that the
+     * backend face coordinates match the displayed video.
+     */
+    object-fit: contain;
+
+    display: none;
+    background: #020914;
 }
 
+
+/* =========================================================
+   CANVAS
+========================================================= */
+
+#canvas {
+    display: none;
+}
+
+
+/* =========================================================
+   CAMERA PLACEHOLDER
+========================================================= */
+
 .placeholder {
-    position: absolute;
-    inset: 0;
+    width: 100%;
+    min-height: 500px;
+
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
-    color: #8295aa;
+    justify-content: center;
+
     text-align: center;
+    padding: 30px;
 }
 
 .camera-icon {
-    font-size: 55px;
-    margin-bottom: 15px;
+    font-size: 60px;
+    margin-bottom: 20px;
 }
 
 .placeholder h2 {
-    color: #ffffff;
-    margin-bottom: 8px;
+    font-size: 24px;
+    margin-bottom: 10px;
 }
 
-.face-box {
-    display: none;
-    position: absolute;
-    border: 4px solid #21e66f;
-    pointer-events: none;
+.placeholder p {
+    color: #8da3bd;
+    font-size: 16px;
 }
+
+
+/* =========================================================
+   FACE DETECTION BOX
+========================================================= */
+
+.face-box {
+    position: absolute;
+
+    /*
+     * Bright green detection rectangle.
+     */
+    border: 3px solid #22c55e;
+
+    /*
+     * Slight green glow so it is easy to see.
+     */
+    box-shadow:
+        0 0 8px rgba(34, 197, 94, 0.8),
+        inset 0 0 8px rgba(34, 197, 94, 0.15);
+
+    /*
+     * VERY IMPORTANT:
+     * The box must not interfere with the video.
+     */
+    pointer-events: none;
+
+    display: none;
+
+    /*
+     * Keep the box above the video.
+     */
+    z-index: 20;
+
+    /*
+     * Prevent border from changing dimensions.
+     */
+    box-sizing: border-box;
+
+    border-radius: 4px;
+}
+
+
+/* =========================================================
+   STATUS
+========================================================= */
 
 .status {
     position: absolute;
+
     left: 20px;
     bottom: 20px;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 9px 15px;
-    border-radius: 20px;
+
+    padding: 10px 16px;
+
+    background: rgba(3, 12, 25, 0.85);
+
+    border: 1px solid #304963;
+
+    border-radius: 10px;
+
+    color: #d6e4f5;
+
     font-size: 14px;
+
+    z-index: 30;
+
+    backdrop-filter: blur(5px);
 }
+
+
+/* =========================================================
+   CONTROLS
+========================================================= */
 
 .controls {
     display: flex;
-    gap: 12px;
     justify-content: center;
-    margin: 22px 0;
+    align-items: center;
+    gap: 14px;
+
+    margin: 25px 0 30px;
+
+    flex-wrap: wrap;
 }
+
+
+/* =========================================================
+   BUTTONS
+========================================================= */
 
 button {
     border: none;
     border-radius: 10px;
-    padding: 13px 25px;
+
+    padding: 14px 24px;
+
     font-size: 16px;
     font-weight: bold;
+
     cursor: pointer;
+
+    transition:
+        transform 0.2s ease,
+        opacity 0.2s ease,
+        background 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+    transform: translateY(-2px);
+}
+
+button:active:not(:disabled) {
+    transform: translateY(0);
 }
 
 button:disabled {
-    opacity: 0.45;
     cursor: not-allowed;
+    opacity: 0.45;
 }
+
+
+/* Primary button */
 
 .primary {
-    background: #2388ff;
-    color: #ffffff;
+    background: #1769d1;
+    color: white;
 }
+
+.primary:hover:not(:disabled) {
+    background: #1f7bea;
+}
+
+
+/* Secondary buttons */
 
 .secondary {
-    background: #263548;
+    background: #17283d;
+    color: #ffffff;
+
+    border: 1px solid #304963;
+}
+
+.secondary:hover:not(:disabled) {
+    background: #203650;
+}
+
+
+/* =========================================================
+   RESULT CARD
+========================================================= */
+
+.result-card {
+    width: 100%;
+
+    background: #0b1a2d;
+
+    border: 1px solid #263d58;
+
+    border-radius: 20px;
+
+    padding: 38px 30px;
+
+    text-align: center;
+
+    margin-bottom: 30px;
+}
+
+
+/* =========================================================
+   RESULT TITLE
+========================================================= */
+
+.result-title {
+    color: #8ea8c5;
+
+    font-size: 14px;
+
+    letter-spacing: 3px;
+
+    margin-bottom: 18px;
+}
+
+
+/* =========================================================
+   RESULT LABEL
+========================================================= */
+
+.result-label {
+    font-size: 48px;
+
+    font-weight: bold;
+
+    margin-bottom: 25px;
+
     color: #ffffff;
 }
 
-.result-card {
-    background: #0d1a2a;
-    border: 1px solid #23354a;
-    border-radius: 18px;
-    padding: 25px;
-    text-align: center;
-}
 
-.result-title {
-    color: #8fa3b9;
-    font-size: 13px;
-    letter-spacing: 2px;
-    margin-bottom: 12px;
-}
-
-.result-label {
-    font-size: 38px;
-    font-weight: bold;
-}
+/* REAL */
 
 .result-label.real {
-    color: #21e66f;
+    color: #22c55e;
+
+    text-shadow:
+        0 0 15px rgba(34, 197, 94, 0.35);
 }
+
+
+/* FAKE */
 
 .result-label.fake {
-    color: #ff4d5e;
+    color: #ef4444;
+
+    text-shadow:
+        0 0 15px rgba(239, 68, 68, 0.35);
 }
 
+
+/* UNCERTAIN / NO FACE */
+
 .result-label.uncertain {
-    color: #ffd43b;
+    color: #f59e0b;
+
+    text-shadow:
+        0 0 15px rgba(245, 158, 11, 0.25);
 }
+
+
+/* =========================================================
+   PROBABILITIES
+========================================================= */
 
 .probabilities {
     display: flex;
+
     justify-content: center;
-    gap: 80px;
-    margin: 20px 0;
+
+    gap: 100px;
+
+    margin-bottom: 25px;
 }
 
 .probabilities div {
     display: flex;
+
     flex-direction: column;
-    gap: 5px;
+
+    gap: 8px;
 }
 
 .probabilities span {
-    color: #8295aa;
-    font-size: 12px;
+    color: #8ea8c5;
+
+    font-size: 14px;
+
+    letter-spacing: 1px;
 }
 
 .probabilities strong {
-    font-size: 24px;
+    font-size: 28px;
+
+    color: #ffffff;
 }
+
+
+/* =========================================================
+   FACE INFO
+========================================================= */
 
 #faceInfo {
-    color: #aebdce;
+    color: #9db1ca;
+
+    font-size: 16px;
 }
 
+
+/* =========================================================
+   INFORMATION SECTION
+========================================================= */
+
 .info {
-    margin-top: 25px;
-    background: #0d1a2a;
-    border: 1px solid #23354a;
-    border-radius: 18px;
-    padding: 25px;
+    background: #0b1a2d;
+
+    border: 1px solid #263d58;
+
+    border-radius: 20px;
+
+    padding: 35px 30px;
+
+    margin-bottom: 30px;
 }
 
 .info h2 {
-    margin-bottom: 20px;
+    text-align: center;
+
+    font-size: 28px;
+
+    margin-bottom: 30px;
 }
+
+
+/* =========================================================
+   STEPS
+========================================================= */
 
 .steps {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 15px;
+
+    grid-template-columns:
+        repeat(4, 1fr);
+
+    gap: 20px;
 }
 
-.steps div {
-    background: #101f31;
-    border-radius: 12px;
-    padding: 18px;
+.steps > div {
+    background: #0f2137;
+
+    border: 1px solid #263d58;
+
+    border-radius: 14px;
+
+    padding: 22px;
+
+    min-height: 150px;
 }
 
 .steps span {
-    display: inline-flex;
-    width: 30px;
-    height: 30px;
+    display: flex;
+
     align-items: center;
     justify-content: center;
+
+    width: 35px;
+    height: 35px;
+
+    background: #1769d1;
+
     border-radius: 50%;
-    background: #2388ff;
-    margin-bottom: 10px;
+
+    font-weight: bold;
+
+    margin-bottom: 15px;
 }
 
 .steps p {
-    color: #aebdce;
-    line-height: 1.5;
+    color: #9db1ca;
+
+    line-height: 1.6;
+
     font-size: 14px;
 }
 
+
+/* =========================================================
+   FOOTER
+========================================================= */
+
 footer {
     text-align: center;
-    color: #667b91;
-    margin-top: 30px;
-    font-size: 13px;
+
+    color: #607892;
+
+    font-size: 14px;
+
+    padding: 10px 0 20px;
 }
 
-@media (max-width: 700px) {
 
-    h1 {
-        font-size: 36px;
+/* =========================================================
+   RESPONSIVE - TABLET
+========================================================= */
+
+@media (max-width: 900px) {
+
+    .container {
+        padding: 20px 16px;
+    }
+
+    header h1 {
+        font-size: 40px;
+    }
+
+    .camera-card {
+        min-height: 420px;
+    }
+
+    #video {
+        min-height: 420px;
+    }
+
+    .placeholder {
+        min-height: 420px;
+    }
+
+    .steps {
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+
+    .probabilities {
+        gap: 60px;
+    }
+
+}
+
+
+/* =========================================================
+   RESPONSIVE - MOBILE
+========================================================= */
+
+@media (max-width: 600px) {
+
+    .container {
+        padding: 15px 10px;
+    }
+
+    header {
+        margin-bottom: 20px;
+    }
+
+    header h1 {
+        font-size: 34px;
+    }
+
+    header p {
+        font-size: 15px;
+    }
+
+    .badge {
+        font-size: 10px;
+        letter-spacing: 1px;
+    }
+
+
+    .camera-card {
+        min-height: 300px;
+        border-radius: 14px;
+    }
+
+    #video {
+        min-height: 300px;
+    }
+
+    .placeholder {
+        min-height: 300px;
+    }
+
+    .placeholder h2 {
+        font-size: 19px;
+    }
+
+    .placeholder p {
+        font-size: 13px;
+    }
+
+    .camera-icon {
+        font-size: 45px;
+    }
+
+
+    .controls {
+        flex-direction: column;
+
+        width: 100%;
+    }
+
+    .controls button {
+        width: 100%;
+    }
+
+
+    .result-card {
+        padding: 28px 15px;
+
+        border-radius: 14px;
+    }
+
+    .result-label {
+        font-size: 38px;
+    }
+
+
+    .probabilities {
+        gap: 50px;
+    }
+
+    .probabilities strong {
+        font-size: 24px;
+    }
+
+
+    .info {
+        padding: 25px 15px;
     }
 
     .steps {
         grid-template-columns: 1fr;
     }
 
-    .probabilities {
-        gap: 40px;
-    }
+}
+
+
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
+
+button:focus-visible {
+    outline: 3px solid #60a5fa;
+
+    outline-offset: 3px;
 }

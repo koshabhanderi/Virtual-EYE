@@ -5,17 +5,22 @@
 
     <meta charset="UTF-8">
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>
         FakeShield - AI Face Authenticity Detection
     </title>
 
-    <link rel="stylesheet"
-          href="/static/style.css">
+    <link
+        rel="stylesheet"
+        href="/static/style.css"
+    >
 
 </head>
+
 
 <body>
 
@@ -40,22 +45,26 @@
 
     <main>
 
-        <!-- CAMERA / SCREEN SECTION -->
+        <!-- CAMERA / VIDEO SECTION -->
 
         <section class="camera-card">
 
-            <video id="video"
-                   autoplay
-                   playsinline>
-            </video>
+            <video
+                id="video"
+                autoplay
+                playsinline
+            ></video>
 
-            <canvas id="canvas"
-                    hidden>
-            </canvas>
+            <canvas
+                id="canvas"
+                hidden
+            ></canvas>
 
 
-            <div id="cameraPlaceholder"
-                 class="placeholder">
+            <div
+                id="cameraPlaceholder"
+                class="placeholder"
+            >
 
                 <div class="camera-icon">
                     📺
@@ -66,23 +75,27 @@
                 </h2>
 
                 <p>
-                    Use your webcam or share your
-                    Google Meet window.
+                    Use your webcam or share your Google Meet window.
                 </p>
 
             </div>
 
 
-            <div id="faceBox"
-                 class="face-box">
-            </div>
+            <!-- GREEN FACE DETECTION BOX -->
+
+            <div
+                id="faceBox"
+                class="face-box"
+            ></div>
 
 
-            <div id="status"
-                 class="status">
+            <!-- STATUS -->
 
+            <div
+                id="status"
+                class="status"
+            >
                 Ready
-
             </div>
 
         </section>
@@ -92,28 +105,28 @@
 
         <section class="controls">
 
-            <button id="meetBtn"
-                    class="primary">
-
+            <button
+                id="meetBtn"
+                class="primary"
+            >
                 Share Google Meet
-
             </button>
 
 
-            <button id="cameraBtn"
-                    class="secondary">
-
+            <button
+                id="cameraBtn"
+                class="secondary"
+            >
                 Use Webcam
-
             </button>
 
 
-            <button id="stopBtn"
-                    class="secondary"
-                    disabled>
-
+            <button
+                id="stopBtn"
+                class="secondary"
+                disabled
+            >
                 Stop
-
             </button>
 
         </section>
@@ -128,11 +141,11 @@
             </div>
 
 
-            <div id="resultLabel"
-                 class="result-label">
-
+            <div
+                id="resultLabel"
+                class="result-label"
+            >
                 WAITING
-
             </div>
 
 
@@ -173,7 +186,7 @@
         </section>
 
 
-        <!-- INFORMATION -->
+        <!-- HOW IT WORKS -->
 
         <section class="info">
 
@@ -191,8 +204,7 @@
                     </span>
 
                     <p>
-                        Share your Google Meet window
-                        or browser tab.
+                        Share your Google Meet window or browser tab.
                     </p>
 
                 </div>
@@ -205,8 +217,7 @@
                     </span>
 
                     <p>
-                        YuNet detects visible faces
-                        in the shared video.
+                        YuNet detects visible faces in the shared video.
                     </p>
 
                 </div>
@@ -219,8 +230,7 @@
                     </span>
 
                     <p>
-                        The largest visible face is
-                        analyzed by Xception.
+                        The largest visible face is analyzed by Xception.
                     </p>
 
                 </div>
@@ -233,8 +243,7 @@
                     </span>
 
                     <p>
-                        FakeShield reports REAL,
-                        UNCERTAIN, or FAKE.
+                        FakeShield reports REAL, UNCERTAIN, or FAKE.
                     </p>
 
                 </div>
@@ -259,7 +268,7 @@
 
 /* ============================================================
    ELEMENTS
-   ============================================================ */
+============================================================ */
 
 const video =
     document.getElementById("video");
@@ -299,8 +308,8 @@ const placeholder =
 
 
 /* ============================================================
-   VARIABLES
-   ============================================================ */
+   STATE
+============================================================ */
 
 let stream = null;
 
@@ -311,9 +320,29 @@ let busy = false;
 let timer = null;
 
 
+/*
+ * Store recent predictions.
+ *
+ * This prevents one unstable frame from immediately
+ * changing REAL into FAKE while the person is talking,
+ * moving, blinking, etc.
+ */
+
+let predictionHistory = [];
+
+let fakeStreak = 0;
+
+
+/*
+ * Number of recent predictions used for smoothing.
+ */
+
+const MAX_HISTORY = 5;
+
+
 /* ============================================================
    STATUS
-   ============================================================ */
+============================================================ */
 
 function setStatus(text) {
 
@@ -324,7 +353,7 @@ function setStatus(text) {
 
 /* ============================================================
    RESET RESULT
-   ============================================================ */
+============================================================ */
 
 function resetResult() {
 
@@ -334,29 +363,40 @@ function resetResult() {
     resultLabel.className =
         "result-label";
 
-
     realValue.textContent =
         "--";
 
     fakeValue.textContent =
         "--";
 
-
     faceInfo.textContent =
         "No analysis performed yet.";
 
-
     faceBox.style.display =
         "none";
+
+
+    /*
+     * Clear previous prediction history.
+     */
+
+    predictionHistory = [];
+
+    fakeStreak = 0;
 
 }
 
 
 /* ============================================================
    DRAW FACE BOX
-   ============================================================ */
+============================================================ */
 
 function drawFaceBox(result) {
+
+    /*
+     * If backend did not return a face box,
+     * hide the rectangle.
+     */
 
     if (!result.box) {
 
@@ -368,6 +408,10 @@ function drawFaceBox(result) {
     }
 
 
+    /*
+     * Wait until the browser knows the video dimensions.
+     */
+
     if (
         !video.videoWidth ||
         !video.videoHeight
@@ -378,31 +422,82 @@ function drawFaceBox(result) {
     }
 
 
+    /*
+     * Get the actual displayed position
+     * of the video.
+     */
+
+    const videoRect =
+        video.getBoundingClientRect();
+
+
+    /*
+     * Get the camera-card position.
+     */
+
+    const containerRect =
+        video.parentElement.getBoundingClientRect();
+
+
+    /*
+     * Calculate scaling between the original
+     * video resolution and displayed video.
+     */
+
     const scaleX =
-        video.clientWidth /
+        videoRect.width /
         video.videoWidth;
 
-
     const scaleY =
-        video.clientHeight /
+        videoRect.height /
         video.videoHeight;
 
 
-    faceBox.style.left =
-        `${result.box.x * scaleX}px`;
+    /*
+     * Convert backend coordinates into
+     * coordinates relative to the camera card.
+     */
 
+    const left =
+        (Number(result.box.x) * scaleX) +
+        (videoRect.left - containerRect.left);
+
+
+    const top =
+        (Number(result.box.y) * scaleY) +
+        (videoRect.top - containerRect.top);
+
+
+    const width =
+        Number(result.box.w) *
+        scaleX;
+
+
+    const height =
+        Number(result.box.h) *
+        scaleY;
+
+
+    /*
+     * Apply rectangle position.
+     */
+
+    faceBox.style.left =
+        `${left}px`;
 
     faceBox.style.top =
-        `${result.box.y * scaleY}px`;
-
+        `${top}px`;
 
     faceBox.style.width =
-        `${result.box.w * scaleX}px`;
-
+        `${width}px`;
 
     faceBox.style.height =
-        `${result.box.h * scaleY}px`;
+        `${height}px`;
 
+
+    /*
+     * Show green rectangle.
+     */
 
     faceBox.style.display =
         "block";
@@ -412,28 +507,13 @@ function drawFaceBox(result) {
 
 /* ============================================================
    DISPLAY RESULT
-   ============================================================ */
+============================================================ */
 
 function displayResult(result) {
 
-    if (!result) {
-
-        resultLabel.textContent =
-            "ERROR";
-
-        resultLabel.className =
-            "result-label uncertain";
-
-        faceInfo.textContent =
-            "No result received from server.";
-
-        faceBox.style.display =
-            "none";
-
-        return;
-
-    }
-
+    /*
+     * No face detected
+     */
 
     if (!result.face_detected) {
 
@@ -459,32 +539,196 @@ function displayResult(result) {
         faceBox.style.display =
             "none";
 
+
+        /*
+         * Clear prediction history because
+         * there is no valid face.
+         */
+
+        predictionHistory = [];
+
+        fakeStreak = 0;
+
         return;
 
     }
 
 
+    /* --------------------------------------------------------
+       GET BACKEND VALUES
+    -------------------------------------------------------- */
+
+    const fakeProbability =
+        Number(
+            result.fake_probability
+        );
+
+
+    const realProbability =
+        Number(
+            result.real_probability
+        );
+
+
+    /*
+     * Safety check.
+     */
+
+    if (
+        !Number.isFinite(fakeProbability) ||
+        !Number.isFinite(realProbability)
+    ) {
+
+        return;
+
+    }
+
+
+    /* --------------------------------------------------------
+       STORE RECENT PREDICTION
+    -------------------------------------------------------- */
+
+    predictionHistory.push(
+        fakeProbability
+    );
+
+
+    /*
+     * Keep only the latest 5 predictions.
+     */
+
+    if (
+        predictionHistory.length >
+        MAX_HISTORY
+    ) {
+
+        predictionHistory.shift();
+
+    }
+
+
+    /* --------------------------------------------------------
+       CALCULATE AVERAGE
+    -------------------------------------------------------- */
+
+    const averageFake =
+        predictionHistory.reduce(
+            (sum, value) => {
+                return sum + value;
+            },
+            0
+        ) /
+        predictionHistory.length;
+
+
+    const averageReal =
+        100 - averageFake;
+
+
+    /* --------------------------------------------------------
+       DISPLAY SMOOTHED PROBABILITIES
+    -------------------------------------------------------- */
+
+    realValue.textContent =
+        averageReal.toFixed(1) +
+        "%";
+
+
+    fakeValue.textContent =
+        averageFake.toFixed(1) +
+        "%";
+
+
+    /* --------------------------------------------------------
+       STABLE CLASSIFICATION
+    -------------------------------------------------------- */
+
+    /*
+     * We require several consecutive high
+     * predictions before declaring FAKE.
+     *
+     * This helps prevent speaking/movement
+     * from causing sudden FAKE results.
+     */
+
+    if (averageFake >= 55) {
+
+        fakeStreak++;
+
+    } else {
+
+        fakeStreak = 0;
+
+    }
+
+
+    let finalLabel;
+
+
+    /*
+     * FAKE:
+     * Require 3 consecutive high averages.
+     */
+
+    if (fakeStreak >= 3) {
+
+        finalLabel =
+            "FAKE";
+
+    }
+
+
+    /*
+     * UNCERTAIN:
+     * Moderate probability.
+     */
+
+    else if (averageFake >= 45) {
+
+        finalLabel =
+            "UNCERTAIN";
+
+    }
+
+
+    /*
+     * REAL:
+     * Low/moderate fake probability.
+     */
+
+    else {
+
+        finalLabel =
+            "REAL";
+
+    }
+
+
+    /* --------------------------------------------------------
+       UPDATE LABEL
+    -------------------------------------------------------- */
+
     resultLabel.textContent =
-        result.label;
+        finalLabel;
 
 
     resultLabel.className =
         "result-label " +
-        result.label.toLowerCase();
+        finalLabel.toLowerCase();
 
 
-    realValue.textContent =
-        result.real_probability + "%";
-
-
-    fakeValue.textContent =
-        result.fake_probability + "%";
-
+    /* --------------------------------------------------------
+       FACE INFORMATION
+    -------------------------------------------------------- */
 
     faceInfo.textContent =
         `${result.face_count} face(s) detected. ` +
         `Largest face analyzed.`;
 
+
+    /* --------------------------------------------------------
+       DRAW GREEN FACE BOX
+    -------------------------------------------------------- */
 
     drawFaceBox(result);
 
@@ -493,16 +737,19 @@ function displayResult(result) {
 
 /* ============================================================
    ANALYZE FRAME
-   ============================================================ */
+============================================================ */
 
 async function analyzeFrame() {
 
     /*
-     * Do not start another request while the previous
-     * request is still running.
+     * Don't process if stopped or another
+     * request is already running.
      */
 
-    if (!running || busy) {
+    if (
+        !running ||
+        busy
+    ) {
 
         return;
 
@@ -510,7 +757,7 @@ async function analyzeFrame() {
 
 
     /*
-     * Make sure video has a usable frame.
+     * Make sure video has valid dimensions.
      */
 
     if (
@@ -526,48 +773,44 @@ async function analyzeFrame() {
     busy = true;
 
 
-    try {
+    /* --------------------------------------------------------
+       COPY VIDEO FRAME TO CANVAS
+    -------------------------------------------------------- */
 
-        /* ----------------------------------------------------
-           PREPARE CANVAS
-           ---------------------------------------------------- */
+    canvas.width =
+        video.videoWidth;
 
-        const maxWidth = 480;
-const maxHeight = 360;
-
-const scale = Math.min(
-    maxWidth / video.videoWidth,
-    maxHeight / video.videoHeight,
-    1
-);
-
-canvas.width = Math.round(video.videoWidth * scale);
-canvas.height = Math.round(video.videoHeight * scale);
+    canvas.height =
+        video.videoHeight;
 
 
-        const ctx =
-            canvas.getContext("2d");
-
-
-        ctx.drawImage(
-            video,
-            0,
-            0,
-            canvas.width,
-            canvas.height
+    const ctx =
+        canvas.getContext(
+            "2d"
         );
 
 
-        /* ----------------------------------------------------
-           CONVERT FRAME TO JPEG
-           ---------------------------------------------------- */
+    ctx.drawImage(
+        video,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
 
-        const image =
-                canvas.toDataURL(
-                "image/jpeg",
-                0.50
-         );
 
+    /* --------------------------------------------------------
+       CONVERT FRAME TO JPEG
+    -------------------------------------------------------- */
+
+    const image =
+        canvas.toDataURL(
+            "image/jpeg",
+            0.70
+        );
+
+
+    try {
 
         setStatus(
             "Analyzing..."
@@ -576,71 +819,98 @@ canvas.height = Math.round(video.videoHeight * scale);
 
         /* ----------------------------------------------------
            SEND IMAGE TO FLASK
-           ---------------------------------------------------- */
+        ---------------------------------------------------- */
 
-        const response = await fetch("/predict", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                image: image
-            })
-        });
+        const response =
+            await fetch(
+                "/predict",
+                {
+                    method: "POST",
 
-        const responseText = await response.text();
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
 
-        console.log(
-            "Prediction HTTP status:",
-            response.status
-        );
+                    body:
+                        JSON.stringify({
+                            image: image
+                        })
+                }
+            );
 
-        console.log(
-            "Prediction response:",
-            responseText
-        );
+
+        /*
+         * IMPORTANT:
+         *
+         * Read text first instead of immediately
+         * calling response.json().
+         *
+         * This prevents JSON errors when Render
+         * returns an HTML error page.
+         */
+
+        const responseText =
+            await response.text();
+
 
         let result;
 
+
         try {
-            result = JSON.parse(responseText);
+
+            result =
+                JSON.parse(
+                    responseText
+                );
+
         } catch (jsonError) {
-            console.error(
-                "Server did not return valid JSON:",
-                jsonError
-            );
 
             console.error(
-                "Raw server response:",
+                "Server returned non-JSON:",
                 responseText
             );
 
             throw new Error(
-                `Server returned an invalid response (${response.status}).`
+                `Server returned invalid response (${response.status}).`
             );
+
         }
+
+
+        /*
+         * Handle HTTP errors.
+         */
 
         if (!response.ok) {
+
             throw new Error(
                 result.error ||
-                result.message ||
-                `Server error (${response.status})`
+                `Server error (${response.status}).`
             );
+
         }
 
+
+        /*
+         * Handle backend errors.
+         */
+
         if (
-            result.ok === false &&
-            result.error
+            result.ok === false
         ) {
+
             throw new Error(
-                result.error
+                result.error ||
+                "Prediction failed."
             );
+
         }
 
 
         /* ----------------------------------------------------
            DISPLAY RESULT
-           ---------------------------------------------------- */
+        ---------------------------------------------------- */
 
         displayResult(
             result
@@ -669,10 +939,6 @@ canvas.height = Math.round(video.videoHeight * scale);
             error.message;
 
 
-        faceBox.style.display =
-            "none";
-
-
     } finally {
 
         busy = false;
@@ -684,12 +950,16 @@ canvas.height = Math.round(video.videoHeight * scale);
 
 /* ============================================================
    STOP CURRENT STREAM
-   ============================================================ */
+============================================================ */
 
 function stopCurrentStream() {
 
     running = false;
 
+
+    /*
+     * Stop analysis timer.
+     */
 
     if (timer) {
 
@@ -702,19 +972,28 @@ function stopCurrentStream() {
     }
 
 
+    /*
+     * Stop camera/screen tracks.
+     */
+
     if (stream) {
 
         stream
             .getTracks()
             .forEach(
-                track => track.stop()
+                track => {
+                    track.stop();
+                }
             );
-
 
         stream = null;
 
     }
 
+
+    /*
+     * Remove video source.
+     */
 
     video.srcObject =
         null;
@@ -728,32 +1007,51 @@ function stopCurrentStream() {
         "flex";
 
 
+    /*
+     * Reset buttons.
+     */
+
     meetBtn.disabled =
         false;
 
-
     cameraBtn.disabled =
         false;
-
 
     stopBtn.disabled =
         true;
 
 
+    /*
+     * Hide face box.
+     */
+
     faceBox.style.display =
         "none";
+
+
+    /*
+     * Clear predictions.
+     */
+
+    predictionHistory = [];
+
+    fakeStreak = 0;
 
 }
 
 
 /* ============================================================
    START STREAM
-   ============================================================ */
+============================================================ */
 
 async function startStream(
     newStream,
     message
 ) {
+
+    /*
+     * Stop any previous stream.
+     */
 
     stopCurrentStream();
 
@@ -761,6 +1059,10 @@ async function startStream(
     stream =
         newStream;
 
+
+    /*
+     * Attach stream to video.
+     */
 
     video.srcObject =
         stream;
@@ -778,17 +1080,23 @@ async function startStream(
         true;
 
 
+    /*
+     * Update buttons.
+     */
+
     meetBtn.disabled =
         true;
-
 
     cameraBtn.disabled =
         true;
 
-
     stopBtn.disabled =
         false;
 
+
+    /*
+     * Reset previous result.
+     */
 
     resetResult();
 
@@ -799,18 +1107,19 @@ async function startStream(
 
 
     /*
-     * Analyze one frame every 5 seconds.
+     * Analyze every 1.5 seconds.
      */
 
     timer =
         setInterval(
             analyzeFrame,
-            5000
+            1500
         );
 
 
     /*
-     * Detect when the user stops sharing.
+     * Detect when the shared screen/camera
+     * is stopped externally.
      */
 
     const videoTrack =
@@ -838,37 +1147,31 @@ async function startStream(
 
 
 /* ============================================================
-   SHARE GOOGLE MEET
-   ============================================================ */
+   GOOGLE MEET / SCREEN SHARE
+============================================================ */
 
 async function shareGoogleMeet() {
 
     try {
 
-        setStatus(
-            "Opening screen sharing..."
-        );
-
-
         const newStream =
-            await navigator.mediaDevices
-                .getDisplayMedia({
+            await navigator.mediaDevices.getDisplayMedia({
 
-                    video: {
+                video: {
 
-                        frameRate: {
+                    frameRate: {
 
-                            ideal: 10,
+                        ideal: 10,
 
-                            max: 15
+                        max: 15
 
-                        }
+                    }
 
-                    },
+                },
 
-                    audio: false
+                audio: false
 
-                });
+            });
 
 
         await startStream(
@@ -899,44 +1202,37 @@ async function shareGoogleMeet() {
 
 
 /* ============================================================
-   USE WEBCAM
-   ============================================================ */
+   WEBCAM
+============================================================ */
 
 async function useWebcam() {
 
     try {
 
-        setStatus(
-            "Opening webcam..."
-        );
-
-
         const newStream =
-            await navigator.mediaDevices
-                .getUserMedia({
+            await navigator.mediaDevices.getUserMedia({
 
-                    video: {
+                video: {
 
-                        facingMode:
-                            "user",
+                    facingMode: "user",
 
-                        width: {
+                    width: {
 
-                            ideal: 1280
-
-                        },
-
-                        height: {
-
-                            ideal: 720
-
-                        }
+                        ideal: 1280
 
                     },
 
-                    audio: false
+                    height: {
 
-                });
+                        ideal: 720
+
+                    }
+
+                },
+
+                audio: false
+
+            });
 
 
         await startStream(
@@ -948,7 +1244,7 @@ async function useWebcam() {
     } catch (error) {
 
         console.error(
-            "Webcam error:",
+            "Camera error:",
             error
         );
 
@@ -968,7 +1264,7 @@ async function useWebcam() {
 
 /* ============================================================
    BUTTON EVENTS
-   ============================================================ */
+============================================================ */
 
 meetBtn.addEventListener(
     "click",
@@ -999,12 +1295,35 @@ stopBtn.addEventListener(
 
 
 /* ============================================================
-   CLEANUP
-   ============================================================ */
+   WINDOW CLOSE
+============================================================ */
 
 window.addEventListener(
     "beforeunload",
     stopCurrentStream
+);
+
+
+/* ============================================================
+   WINDOW RESIZE
+============================================================ */
+
+/*
+ * Recalculate the face-box position if the browser
+ * window is resized.
+ */
+
+window.addEventListener(
+    "resize",
+    () => {
+
+        /*
+         * The latest backend result is not stored separately,
+         * so the next analysis frame will redraw the box
+         * using the new dimensions.
+         */
+
+    }
 );
 
 </script>
